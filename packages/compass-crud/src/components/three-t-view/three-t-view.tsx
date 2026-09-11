@@ -26,7 +26,7 @@ import {
   compiledQueryToAppliedQuery,
 } from './builder-query';
 
-const DEFAULT_BUILDER_WIDTH = 380;
+const DEFAULT_BUILDER_WIDTH = 460;
 const MIN_BUILDER_WIDTH = 280;
 const MAX_BUILDER_WIDTH = 900;
 
@@ -199,7 +199,7 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
               state={builderState}
               onChange={setBuilderState}
               onRun={onRun}
-              errors={compiled.errors}
+              compiled={compiled}
             />
           </div>
         </aside>

@@ -10,7 +10,7 @@ import {
 import { DocumentList } from '@mongodb-js/compass-components';
 import { QueryBuilderPanel } from './query-builder-panel';
 import type { BuilderState } from './builder-query';
-import { EMPTY_BUILDER_STATE } from './builder-query';
+import { EMPTY_BUILDER_STATE, compileBuilderState } from './builder-query';
 
 /**
  * jsdom has no DataTransfer. This stands in for one, carrying a field the way
@@ -43,12 +43,13 @@ function dataTransferWithField(field: string, value: unknown) {
 function renderPanel(state: Partial<BuilderState> = {}) {
   const onChange = sinon.spy();
   const onRun = sinon.spy();
+  const fullState = { ...EMPTY_BUILDER_STATE, ...state };
   render(
     <QueryBuilderPanel
-      state={{ ...EMPTY_BUILDER_STATE, ...state }}
+      state={fullState}
       onChange={onChange}
       onRun={onRun}
-      errors={[]}
+      compiled={compileBuilderState(fullState)}
     />
   );
   return { onChange, onRun };
@@ -182,6 +183,74 @@ describe('QueryBuilderPanel', function () {
       fireEvent.click(screen.getByText('Run'));
 
       expect(onRun).to.have.been.calledOnce;
+    });
+  });
+
+  describe('query preview', function () {
+    it('shows the filter the rows compile to', function () {
+      renderPanel({
+        conditions: [
+          {
+            id: 'c1',
+            field: 'status',
+            operator: 'eq',
+            valueText: "'shipped'",
+            enabled: true,
+          },
+        ],
+      });
+
+      expect(
+        screen.getByTestId('three-t-preview-filter').textContent
+      ).to.contain("status: 'shipped'");
+    });
+
+    it('shows descending as -1, which is what actually runs', function () {
+      renderPanel({
+        sorts: [
+          { id: 's1', field: 'createdAt', direction: 'desc', enabled: true },
+        ],
+      });
+
+      expect(screen.getByTestId('three-t-preview-sort').textContent).to.contain(
+        'createdAt: -1'
+      );
+    });
+
+    it('shows ascending as 1', function () {
+      renderPanel({
+        sorts: [
+          { id: 's1', field: 'createdAt', direction: 'asc', enabled: true },
+        ],
+      });
+
+      expect(screen.getByTestId('three-t-preview-sort').textContent).to.contain(
+        'createdAt: 1'
+      );
+    });
+
+    it('keeps the order the sort rows are in', function () {
+      renderPanel({
+        sorts: [
+          { id: 's1', field: 'lastName', direction: 'asc', enabled: true },
+          { id: 's2', field: 'createdAt', direction: 'desc', enabled: true },
+        ],
+      });
+
+      const sortText = screen.getByTestId('three-t-preview-sort').textContent!;
+      expect(sortText.indexOf('lastName')).to.be.lessThan(
+        sortText.indexOf('createdAt')
+      );
+    });
+
+    it('says none when there is no projection or sort', function () {
+      renderPanel();
+      expect(
+        screen.getByTestId('three-t-preview-project').textContent
+      ).to.equal('none');
+      expect(screen.getByTestId('three-t-preview-sort').textContent).to.equal(
+        'none'
+      );
     });
   });
 });
