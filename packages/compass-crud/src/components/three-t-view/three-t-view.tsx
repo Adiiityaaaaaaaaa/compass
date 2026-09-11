@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Icon,
   IconButton,
@@ -90,9 +84,11 @@ const collapsedStripDark = css({
  * The "3T View" collection tab: document results on the left, and a visual
  * query builder on the right that fields can be dragged into.
  *
- * The builder owns its rows and compiles them into a query. Running applies
- * that query through the query bar, so the results, the query bar contents and
- * the recent query history all stay consistent with the rest of Compass.
+ * The builder owns its rows and compiles them into a query. The query bar at
+ * the top of the tab is where that query is shown: editing a row writes the
+ * filter, projection, sort, skip and limit into the query bar inputs, and
+ * running applies them from there. So the query the builder describes is the
+ * same query, in the same boxes, as one typed by hand.
  */
 export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
   props
@@ -110,17 +106,12 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
 
   const { store } = props;
 
-  // This tab is about scanning rows next to the builder, so it opens in the
-  // table view. setState rather than viewChanged: the latter persists the
-  // choice, which would change what the Documents tab opens with too. The
-  // view switcher in the toolbar still works from here.
-  const didSetInitialView = useRef(false);
+  // Keep the query bar showing what the rows currently describe, without
+  // running it. The builder is the source of truth in this tab, so anything
+  // typed directly into the bar is replaced the next time a row changes.
   useEffect(() => {
-    if (!didSetInitialView.current) {
-      didSetInitialView.current = true;
-      store.setState({ view: 'Table' });
-    }
-  }, [store]);
+    store.queryBar.setQuery(compiledQueryToAppliedQuery(compiled));
+  }, [compiled, store]);
 
   const onRun = useCallback(() => {
     // Every property is sent on every run, using undefined for the ones the
@@ -199,7 +190,7 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
               state={builderState}
               onChange={setBuilderState}
               onRun={onRun}
-              compiled={compiled}
+              errors={compiled.errors}
             />
           </div>
         </aside>

@@ -104,9 +104,17 @@ export const queryBarServiceLocator = createServiceLocator(
         return selectLastAppliedQuery(store.getState(), source);
       },
       /**
+       * Writes a query into the query bar inputs without running it, as though
+       * the user had typed it there. Used by editors that build a query outside
+       * the bar, such as the visual query builder, so that the bar always shows
+       * what is about to run.
+       */
+      setQuery(query: BaseQuery) {
+        store.dispatch(setQuery(query));
+      },
+      /**
        * Replaces the whole query and applies it, as though the user had typed
-       * it into the query bar and pressed Find. Used by editors that build a
-       * query outside the bar, such as the visual query builder.
+       * it into the query bar and pressed Find.
        */
       setAndApplyQuery(query: BaseQuery, source: string) {
         store.dispatch(setQuery(query));

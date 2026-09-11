@@ -17,7 +17,6 @@ import {
 } from '@mongodb-js/compass-components';
 import type {
   BuilderState,
-  CompiledQuery,
   ConditionOperator,
   ConditionRow,
   ProjectionRow,
@@ -25,7 +24,6 @@ import type {
 } from './builder-query';
 import {
   CONDITION_OPERATORS,
-  compiledQueryToText,
   isValuelessOperator,
   nextRowId,
   valueToText,
@@ -134,22 +132,6 @@ const dropZoneActiveDark = css({
   borderStyle: 'solid',
   backgroundColor: palette.green.dark3,
   color: palette.green.light2,
-});
-
-const preview = css({
-  display: 'grid',
-  gridTemplateColumns: 'auto 1fr',
-  columnGap: spacing[200],
-  rowGap: spacing[100],
-  alignItems: 'baseline',
-});
-
-const previewValue = css({
-  fontFamily: 'monospace',
-  fontSize: '12px',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  margin: 0,
 });
 
 const errorList = css({
@@ -277,15 +259,12 @@ export type QueryBuilderPanelProps = {
   state: BuilderState;
   onChange: (state: BuilderState) => void;
   onRun: () => void;
-  /** The query the rows currently compile to, shown above the sections. */
-  compiled: CompiledQuery;
+  errors: string[];
 };
 
 export const QueryBuilderPanel: React.FunctionComponent<
   QueryBuilderPanelProps
-> = ({ state, onChange, onRun, compiled }) => {
-  const errors = compiled.errors;
-  const previewText = compiledQueryToText(compiled);
+> = ({ state, onChange, onRun, errors }) => {
   const update = useCallback(
     (patch: Partial<BuilderState>) => onChange({ ...state, ...patch }),
     [onChange, state]
@@ -312,33 +291,6 @@ export const QueryBuilderPanel: React.FunctionComponent<
 
   return (
     <div className={panel} data-testid="three-t-query-builder">
-      <SectionShell
-        title="Query preview"
-        enabled={true}
-        onEnabledChange={() => undefined}
-      >
-        <div className={preview} data-testid="three-t-query-preview">
-          <Body weight="medium">Filter</Body>
-          <pre className={previewValue} data-testid="three-t-preview-filter">
-            {previewText.filter}
-          </pre>
-          <Body weight="medium">Projection</Body>
-          <pre className={previewValue} data-testid="three-t-preview-project">
-            {previewText.project || 'none'}
-          </pre>
-          <Body weight="medium">Sort</Body>
-          <pre className={previewValue} data-testid="three-t-preview-sort">
-            {previewText.sort || 'none'}
-          </pre>
-          <Body weight="medium">Skip</Body>
-          <pre className={previewValue}>{String(compiled.skip ?? 0)}</pre>
-          <Body weight="medium">Limit</Body>
-          <pre className={previewValue}>
-            {compiled.limit === null ? 'none' : String(compiled.limit)}
-          </pre>
-        </div>
-      </SectionShell>
-
       <SectionShell
         title="Query"
         enabled={state.queryEnabled}
