@@ -19,10 +19,15 @@ import {
   compileBuilderState,
   compiledQueryToAppliedQuery,
 } from './builder-query';
+import {
+  MAX_BUILDER_WIDTH,
+  MIN_BUILDER_WIDTH,
+  loadBuilderState,
+  mirrorBuilderWidth,
+  saveBuilderState,
+} from './builder-session';
 
 const DEFAULT_BUILDER_WIDTH = 460;
-const MIN_BUILDER_WIDTH = 280;
-const MAX_BUILDER_WIDTH = 900;
 
 const layout = css({
   display: 'flex',
@@ -94,8 +99,11 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
   props
 ) => {
   const darkMode = useDarkMode();
-  const [builderState, setBuilderState] =
-    useState<BuilderState>(EMPTY_BUILDER_STATE);
+  const { store } = props;
+  const namespace = store.state.ns;
+  const [builderState, setBuilderState] = useState<BuilderState>(
+    () => loadBuilderState(namespace) ?? EMPTY_BUILDER_STATE
+  );
   const [builderWidth, setBuilderWidth] = useState(DEFAULT_BUILDER_WIDTH);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -104,14 +112,18 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
     [builderState]
   );
 
-  const { store } = props;
-
   // Keep the query bar showing what the rows currently describe, without
   // running it. The builder is the source of truth in this tab, so anything
   // typed directly into the bar is replaced the next time a row changes.
   useEffect(() => {
     store.queryBar.setQuery(compiledQueryToAppliedQuery(compiled));
   }, [compiled, store]);
+
+  // Switching collections unmounts this tab, so the rows are kept per
+  // collection and restored when it is opened again.
+  useEffect(() => {
+    saveBuilderState(namespace, builderState);
+  }, [namespace, builderState]);
 
   const onRun = useCallback(() => {
     // Every property is sent on every run, using undefined for the ones the
@@ -125,21 +137,11 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
     void store.refreshDocuments(true);
   }, [compiled, store]);
 
-  const onResize = useCallback(
-    (nextValue: number) => {
-      // The handle sits on the right edge of the results pane and adds the
-      // pointer movement to the value it was given. The builder is on the
-      // other side of it, so dragging right has to make it narrower.
-      const delta = nextValue - builderWidth;
-      setBuilderWidth(
-        Math.min(
-          MAX_BUILDER_WIDTH,
-          Math.max(MIN_BUILDER_WIDTH, builderWidth - delta)
-        )
-      );
-    },
-    [builderWidth]
-  );
+  // The handle works in mirrored width, so that its own clamping points the
+  // same way the pointer does. See mirrorBuilderWidth for why.
+  const onResize = useCallback((nextValue: number) => {
+    setBuilderWidth(mirrorBuilderWidth(nextValue));
+  }, []);
 
   return (
     <div className={layout} data-testid="three-t-view">
@@ -148,7 +150,7 @@ export const ThreeTView: React.FunctionComponent<DocumentListProps> = (
         {!isCollapsed && (
           <ResizeHandle
             direction={ResizeDirection.RIGHT}
-            value={builderWidth}
+            value={mirrorBuilderWidth(builderWidth)}
             minValue={MIN_BUILDER_WIDTH}
             maxValue={MAX_BUILDER_WIDTH}
             onChange={onResize}
