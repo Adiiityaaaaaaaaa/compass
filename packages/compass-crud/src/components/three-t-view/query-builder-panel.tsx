@@ -90,9 +90,15 @@ const row = css({
 // pixels opens a menu nobody can read. Each control gets its own basis.
 const fieldCell = css({ flex: '1 1 110px', minWidth: 96 });
 const valueCell = css({ flex: '1 1 110px', minWidth: 96 });
-const operatorCell = css({ flex: '0 0 96px' });
-const modeCell = css({ flex: '0 0 116px' });
-const directionCell = css({ flex: '0 0 130px' });
+// Wide enough for the longest label in each menu, since a select's menu is as
+// wide as its trigger and a narrow one wraps every option onto several lines.
+const operatorCell = css({ flex: '0 0 136px' });
+const modeCell = css({ flex: '0 0 120px' });
+const directionCell = css({ flex: '0 0 152px' });
+
+const optionLabel = css({
+  whiteSpace: 'nowrap',
+});
 
 const dragHandle = css({
   flex: 'none',
@@ -305,8 +311,12 @@ export const QueryBuilderPanel: React.FunctionComponent<
               value={state.match}
               onChange={(match) => update({ match: match as 'and' | 'or' })}
             >
-              <Option value="and">Match all ($and)</Option>
-              <Option value="or">Match any ($or)</Option>
+              <Option value="and" className={optionLabel}>
+                Match all ($and)
+              </Option>
+              <Option value="or" className={optionLabel}>
+                Match any ($or)
+              </Option>
             </Select>
           </div>
           <Button
@@ -364,7 +374,11 @@ export const QueryBuilderPanel: React.FunctionComponent<
                 }
               >
                 {CONDITION_OPERATORS.map((op) => (
-                  <Option key={op.value} value={op.value}>
+                  <Option
+                    key={op.value}
+                    value={op.value}
+                    className={optionLabel}
+                  >
                     {op.label}
                   </Option>
                 ))}
@@ -473,8 +487,12 @@ export const QueryBuilderPanel: React.FunctionComponent<
                   })
                 }
               >
-                <Option value="include">include</Option>
-                <Option value="exclude">exclude</Option>
+                <Option value="include" className={optionLabel}>
+                  include
+                </Option>
+                <Option value="exclude" className={optionLabel}>
+                  exclude
+                </Option>
               </Select>
             </div>
           </RowShell>
@@ -555,8 +573,12 @@ export const QueryBuilderPanel: React.FunctionComponent<
                   })
                 }
               >
-                <Option value="asc">ascending (1)</Option>
-                <Option value="desc">descending (-1)</Option>
+                <Option value="asc" className={optionLabel}>
+                  ascending (1)
+                </Option>
+                <Option value="desc" className={optionLabel}>
+                  descending (-1)
+                </Option>
               </Select>
             </div>
           </RowShell>
