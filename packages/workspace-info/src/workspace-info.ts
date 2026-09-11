@@ -9,6 +9,7 @@ const CollectionSubtabSchema = z.enum([
   'Indexes',
   'Validation',
   'GlobalWrites',
+  '3T View',
 ]);
 
 export type CollectionSubtab = z.output<typeof CollectionSubtabSchema>;

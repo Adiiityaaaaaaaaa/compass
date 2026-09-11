@@ -33,7 +33,10 @@ import {
   CompassSidebarPlugin,
 } from '@mongodb-js/compass-sidebar';
 import CompassQueryBarPlugin from '@mongodb-js/compass-query-bar';
-import { CompassDocumentsPlugin } from '@mongodb-js/compass-crud';
+import {
+  CompassDocumentsPlugin,
+  Compass3TViewPlugin,
+} from '@mongodb-js/compass-crud';
 import {
   CompassAggregationsPlugin,
   CreateViewPlugin,
@@ -339,6 +342,7 @@ function CompassWorkspace({
         queryBar={CompassQueryBarPlugin}
         tabs={[
           CompassDocumentsPlugin,
+          Compass3TViewPlugin,
           CompassAggregationsPlugin,
           CompassSchemaPlugin,
           CompassIndexesPlugin,

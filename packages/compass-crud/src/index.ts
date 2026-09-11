@@ -31,7 +31,8 @@ import {
 import { fieldStoreServiceLocator } from '@mongodb-js/compass-field-store';
 import { queryBarServiceLocator } from '@mongodb-js/compass-query-bar';
 import { telemetryLocator } from '@mongodb-js/compass-telemetry/provider';
-import { CrudTabTitle } from './plugin-title';
+import { CrudTabTitle, ThreeTViewTabTitle } from './plugin-title';
+import { ThreeTView } from './components/three-t-view/three-t-view';
 
 const CompassDocumentsPluginProvider = registerCompassPlugin(
   {
@@ -73,6 +74,15 @@ export const CompassDocumentsPlugin = {
   provider: CompassDocumentsPluginProvider,
   content: DocumentList as any, // as any because of reflux store
   header: CrudTabTitle as any, // as any because of reflux store
+};
+
+export const Compass3TViewPlugin = {
+  name: '3T View' as const,
+  // Same provider as the documents tab: the visual query builder shows the
+  // same results and applies its query through the same store.
+  provider: CompassDocumentsPluginProvider,
+  content: ThreeTView as any, // as any because of reflux store
+  header: ThreeTViewTabTitle as any,
 };
 
 export default DocumentList;

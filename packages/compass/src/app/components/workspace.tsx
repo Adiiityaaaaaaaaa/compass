@@ -21,7 +21,10 @@ import {
 } from '@mongodb-js/compass-databases-collections';
 import { CompassSidebarPlugin } from '@mongodb-js/compass-sidebar';
 import CompassQueryBarPlugin from '@mongodb-js/compass-query-bar';
-import { CompassDocumentsPlugin } from '@mongodb-js/compass-crud';
+import {
+  CompassDocumentsPlugin,
+  Compass3TViewPlugin,
+} from '@mongodb-js/compass-crud';
 import { CompassAggregationsPlugin } from '@mongodb-js/compass-aggregations';
 import { CompassSchemaPlugin } from '@mongodb-js/compass-schema';
 import { CompassIndexesPlugin } from '@mongodb-js/compass-indexes';
@@ -89,6 +92,7 @@ export default function Workspace({
         queryBar={CompassQueryBarPlugin}
         tabs={[
           CompassDocumentsPlugin,
+          Compass3TViewPlugin,
           CompassAggregationsPlugin,
           CompassSchemaPlugin,
           CompassIndexesPlugin,

@@ -121,3 +121,11 @@ export const CrudTabTitle = ({
     </div>
   );
 };
+
+export const ThreeTViewTabTitle = () => {
+  return (
+    <div data-testid="three-t-view-tab-title" className={containerStyles}>
+      3T View
+    </div>
+  );
+};
