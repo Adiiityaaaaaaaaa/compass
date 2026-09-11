@@ -6,9 +6,10 @@
 # launches the app.
 #
 # The cost of that convenience is startup time. The application is around half
-# a gigabyte, and it is unpacked on every launch, so the first window takes
-# noticeably longer to appear than it does from an installed or unzipped copy.
-# Use the installer or the zip if that matters more than having one file.
+# a gigabyte and has to be unpacked before it runs. `unpackDirName` pins the
+# destination to one fixed folder under the temporary directory, so the unpack
+# happens on the first launch and later launches reuse it. Without it, a fresh
+# random folder is used every time and every launch pays the full cost.
 name: Build a standalone executable
 
 on:
@@ -97,7 +98,8 @@ jobs:
             "directories": { "output": "dist-standalone" },
             "win": { "target": ["portable"] },
             "portable": {
-              "artifactName": "compass-query-builder-${version}-standalone.exe"
+              "artifactName": "compass-query-builder-${version}-standalone.exe",
+              "unpackDirName": "CompassQueryBuilder"
             }
           }
           CONFIG
