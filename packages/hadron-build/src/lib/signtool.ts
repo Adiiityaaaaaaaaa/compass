@@ -7,7 +7,7 @@ type SigningMethod = Parameters<typeof _garasign>[1]['signingMethod'];
 
 const debug = createDebug('hadron-build:target');
 
-function canSign(): boolean {
+export function canSign(): boolean {
   return !!(
     process.env.GARASIGN_USERNAME &&
     process.env.GARASIGN_PASSWORD &&

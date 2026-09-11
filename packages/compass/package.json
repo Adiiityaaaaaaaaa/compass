@@ -4,7 +4,7 @@
   "productName": "MongoDB Compass",
   "description": "The MongoDB GUI",
   "homepage": "https://www.mongodb.com/products/compass",
-  "version": "0.0.1-dev.0",
+  "version": "1.0.0",
   "apiVersion": "3.0.0",
   "main": "build/main.js",
   "author": {
@@ -32,9 +32,9 @@
       ],
       "distributions": {
         "compass": {
-          "name": "mongodb-compass",
-          "productName": "MongoDB Compass",
-          "bundleId": "com.mongodb.compass",
+          "name": "compass-query-builder",
+          "productName": "Compass Query Builder",
+          "bundleId": "com.compassquerybuilder.app",
           "plugins-directory": ".mongodb/compass/plugins",
           "upgradeCode": "0152273D-2F9F-4913-B67F-0FCD3557FFD1"
         },

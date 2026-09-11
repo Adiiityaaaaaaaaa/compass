@@ -1,8 +1,7 @@
 # Builds a shareable Compass desktop app from this branch.
 #
-# This branch exists only to carry this workflow. The feature itself is on
-# feat/documents-query-builder, which is what the pull request tracks and is
-# deliberately kept free of build tooling MongoDB has no use for.
+# Runs on every push to main and produces a single Setup executable, which is
+# what gets attached to a release.
 #
 # Compass bundles native modules, one of which is Windows only, so a Windows
 # build has to run on Windows. This is why the build is here rather than in a
@@ -10,17 +9,17 @@
 #
 # The result is unsigned. Windows SmartScreen will warn the first time it runs,
 # because signing needs MongoDB's certificates, which this fork does not have.
-name: Build the query builder app
+name: Build Compass Query Builder
 
 on:
   push:
-    branches: [build/documents-query-builder]
+    branches: [main]
   workflow_dispatch:
     inputs:
       skip_installer:
         description: 'Skip the installer and produce only the zipped app'
         required: false
-        default: 'true'
+        default: 'false'
 
 jobs:
   windows:
@@ -81,11 +80,10 @@ jobs:
       - name: Package Compass
         env:
           DEBUG: 'hadron*,compass*'
-          # The installer is built by Squirrel, which signs every binary it
-          # packs and fails without a code signing certificate. A fork has no
-          # certificate, so the installer cannot be built here. Skipping it
-          # still produces a zip of the application, which is what gets shared.
-          HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'true' }}
+          # The installer builds here now: winstaller is only asked to sign
+          # when signing credentials exist, so without them it packs the
+          # installer unsigned instead of failing on every binary.
+          HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'false' }}
         run: npm run package-compass-nocompile
 
       - name: List what was produced
@@ -97,10 +95,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: compass-query-builder-windows
-          path: |
-            packages/compass/dist/*.exe
-            packages/compass/dist/*.msi
-            packages/compass/dist/*.zip
-          if-no-files-found: warn
+          name: compass-query-builder-setup
+          # The single installer executable, not the unpacked application.
+          path: packages/compass/dist/*.exe
+          if-no-files-found: error
           retention-days: 14

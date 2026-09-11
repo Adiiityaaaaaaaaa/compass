@@ -11,7 +11,7 @@ import { windowsInstallerVersion } from './windows-installer-version';
 import createDebug from 'debug';
 import which from 'which';
 import plist from 'plist';
-import { sign, getSignedFilename } from './signtool';
+import { canSign, sign, getSignedFilename } from './signtool';
 import tarGz from './tar-gz';
 import { notarize } from './mac-notary-service';
 import { validateBuildConfig } from './validate-build-config';
@@ -518,8 +518,13 @@ class Target {
       //
       // Here we just set any parameter so that signtool.exe is invoked.
       //
+      // Only when there is actually something to sign with. Asking winstaller
+      // to sign without credentials makes it invoke signtool.exe on every
+      // binary it packs and fail the whole installer, which is what happens on
+      // any build outside MongoDB's release infrastructure.
+      //
       // @see https://jira/mongodb.org/browse/BUILD-920
-      signWithParams: 'sign',
+      ...(canSign() ? { signWithParams: 'sign' } : {}),
       title: this.productName,
       productName: this.productName,
       description: this.description,
