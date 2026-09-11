@@ -45,13 +45,37 @@ jobs:
       - name: Compile workspace packages
         run: npx lerna run bootstrap
 
+      # The usual `compile` script has a postcompile step that generates the
+      # third party notices from .sbom/dependencies.json. That file is produced
+      # by MongoDB's own build system and is gitignored, so it does not exist in
+      # a plain checkout. Running webpack directly skips that step.
+      - name: Build the application bundle
+        run: npm run webpack --workspace mongodb-compass -- --mode production
+
+      # Packaging reads this file and does not tolerate it being missing. The
+      # real one lists every dependency's licence; this build cannot produce it
+      # without the SBOM above, so it says so rather than pretending.
+      - name: Write a placeholder notices file
+        shell: bash
+        run: |
+          cat > packages/compass/THIRD-PARTY-NOTICES.md <<'NOTICE'
+          # Third party notices
+
+          This build was produced from a fork, outside MongoDB's release system,
+          which is where the third party notices are generated. They are not
+          included here.
+
+          Do not redistribute this build publicly. For a copy with complete
+          licence notices, use an official MongoDB Compass release.
+          NOTICE
+
       - name: Package Compass
         env:
           DEBUG: 'hadron*,compass*'
           # Required: the packaging target throws without it.
           HADRON_DISTRIBUTION: compass
           HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'false' }}
-        run: npm run package-compass
+        run: npm run package-compass-nocompile
 
       - name: List what was produced
         if: always()
