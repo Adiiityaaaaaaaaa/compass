@@ -29,6 +29,8 @@ function getCollectionSubTabFromRoute(
       return 'Validation';
     case 'global-writes':
       return 'GlobalWrites';
+    case '3t-view':
+      return '3T View';
     default:
       return undefined;
   }
@@ -48,6 +50,8 @@ function getRouteFromCollectionSubTab(subTab: CollectionSubtab): string {
       return 'validation';
     case 'GlobalWrites':
       return 'global-writes';
+    case '3T View':
+      return '3t-view';
     default:
       return '';
   }

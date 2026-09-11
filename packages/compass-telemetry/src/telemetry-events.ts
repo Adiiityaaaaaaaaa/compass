@@ -3213,6 +3213,7 @@ type ScreenEvent = ConnectionScopedEvent<{
      * The name of the screen that was activated.
      */
     name?:
+      | '3t_view'
       | 'aggregations'
       | 'collections'
       | 'databases'
