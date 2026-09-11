@@ -14,9 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       skip_installer:
-        description: 'Skip the installer and produce only the unpacked app'
+        description: 'Skip the installer and produce only the zipped app'
         required: false
-        default: 'false'
+        default: 'true'
 
 jobs:
   windows:
@@ -77,7 +77,11 @@ jobs:
       - name: Package Compass
         env:
           DEBUG: 'hadron*,compass*'
-          HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'false' }}
+          # The installer is built by Squirrel, which signs every binary it
+          # packs and fails without a code signing certificate. A fork has no
+          # certificate, so the installer cannot be built here. Skipping it
+          # still produces a zip of the application, which is what gets shared.
+          HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'true' }}
         run: npm run package-compass-nocompile
 
       - name: List what was produced
