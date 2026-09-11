@@ -2,8 +2,7 @@
 #
 # Compass is packaged by hadron-build into an application directory. That
 # directory is then wrapped into one self-extracting executable by
-# electron-builder's portable target, which unpacks to a temporary folder and
-# launches the app.
+# electron-builder's portable target, which unpacks it and launches the app.
 #
 # The cost of that convenience is startup time. The application is around half
 # a gigabyte and has to be unpacked before it runs. `unpackDirName` pins the
@@ -66,7 +65,7 @@ jobs:
           NOTICE
 
       # Produces the application directory. The installer is skipped: this
-      # workflow wraps the directory itself rather than installing it.
+      # workflow wraps that directory rather than installing it.
       - name: Package the application directory
         env:
           HADRON_SKIP_INSTALLER: 'true'
@@ -85,29 +84,51 @@ jobs:
           fi
           echo "dir=$dir" >> "$GITHUB_OUTPUT"
           echo "Packaging from $dir"
-          ls "$dir" | head -5
+
+      # Written with node rather than a heredoc so the resolved Electron version
+      # can be read from the installed package. electron-builder needs an exact
+      # version, and Compass declares a range, which it refuses to guess at.
+      - name: Write the wrapper configuration
+        shell: bash
+        run: |
+          set -e
+          node -e '
+            const fs = require("fs");
+            const electronPkg = require.resolve("electron/package.json", {
+              paths: ["packages/compass", "."],
+            });
+            const electronVersion = require(electronPkg).version;
+            fs.writeFileSync(
+              "electron-builder-standalone.json",
+              JSON.stringify(
+                {
+                  appId: "com.compassquerybuilder.app",
+                  productName: "Compass Query Builder",
+                  electronVersion,
+                  directories: { output: "dist-standalone" },
+                  win: { target: ["portable"] },
+                  portable: {
+                    artifactName: "compass-query-builder-1.0.0-standalone.exe",
+                    unpackDirName: "CompassQueryBuilder",
+                  },
+                },
+                null,
+                2
+              )
+            );
+            console.log("electronVersion resolved to", electronVersion);
+          '
+          cat electron-builder-standalone.json
 
       - name: Wrap it into one executable
         shell: bash
         run: |
           set -e
-          cat > electron-builder-standalone.json <<'CONFIG'
-          {
-            "appId": "com.compassquerybuilder.app",
-            "productName": "Compass Query Builder",
-            "directories": { "output": "dist-standalone" },
-            "win": { "target": ["portable"] },
-            "portable": {
-              "artifactName": "compass-query-builder-${version}-standalone.exe",
-              "unpackDirName": "CompassQueryBuilder"
-            }
-          }
-          CONFIG
           # --projectDir: electron-builder takes the version and metadata from
           # package.json, and the monorepo root has none. The app's is in
           # packages/compass.
           # --publish never: on CI it otherwise tries to publish a release by
-          # itself. Publishing is a separate, deliberate step below.
+          # itself, which would race with the deliberate publish step below.
           npx --yes electron-builder@26 \
             --projectDir packages/compass \
             --prepackaged "$(pwd)/${{ steps.packaged.outputs.dir }}" \
@@ -136,4 +157,5 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ github.event.inputs.publish_tag }}" \
-            packages/compass/dist-standalone/*.exe --repo "${{ github.repository }}" --clobber
+            packages/compass/dist-standalone/*.exe \
+            --repo "${{ github.repository }}" --clobber
