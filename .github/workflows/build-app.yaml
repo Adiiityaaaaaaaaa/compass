@@ -1,0 +1,106 @@
+# Builds a shareable Compass desktop app from this branch.
+#
+# This branch exists only to carry this workflow. The feature itself is on
+# feat/documents-query-builder, which is what the pull request tracks and is
+# deliberately kept free of build tooling MongoDB has no use for.
+#
+# Compass bundles native modules, one of which is Windows only, so a Windows
+# build has to run on Windows. This is why the build is here rather than in a
+# container: it cannot be cross compiled from Linux.
+#
+# The result is unsigned. Windows SmartScreen will warn the first time it runs,
+# because signing needs MongoDB's certificates, which this fork does not have.
+name: Build the query builder app
+
+on:
+  push:
+    branches: [build/documents-query-builder]
+  workflow_dispatch:
+    inputs:
+      skip_installer:
+        description: 'Skip the installer and produce only the zipped app'
+        required: false
+        default: 'true'
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    # Compass is a large monorepo and GitHub runners are modest. The job limit
+    # is six hours; this leaves room to see a timeout rather than be killed.
+    timeout-minutes: 350
+
+    env:
+      # Both the webpack config and the packaging step construct a build target
+      # from this, and each throws without it. Set once for the whole job.
+      HADRON_DISTRIBUTION: compass
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: 'npm'
+
+      - name: Install npm 11.16.0
+        run: npm install -g npm@11.16.0
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile workspace packages
+        run: npx lerna run bootstrap
+
+      # The usual `compile` script has a postcompile step that generates the
+      # third party notices from .sbom/dependencies.json. That file is produced
+      # by MongoDB's own build system and is gitignored, so it does not exist in
+      # a plain checkout. Running webpack directly skips that step.
+      - name: Build the application bundle
+        run: npm run webpack --workspace mongodb-compass -- --mode production
+
+      # Packaging reads this file and does not tolerate it being missing. The
+      # real one lists every dependency's licence; this build cannot produce it
+      # without the SBOM above, so it says so rather than pretending.
+      - name: Write a placeholder notices file
+        shell: bash
+        run: |
+          cat > packages/compass/THIRD-PARTY-NOTICES.md <<'NOTICE'
+          # Third party notices
+
+          This build was produced from a fork, outside MongoDB's release system,
+          which is where the third party notices are generated. They are not
+          included here.
+
+          Do not redistribute this build publicly. For a copy with complete
+          licence notices, use an official MongoDB Compass release.
+          NOTICE
+
+      - name: Package Compass
+        env:
+          DEBUG: 'hadron*,compass*'
+          # The installer is built by Squirrel, which signs every binary it
+          # packs and fails without a code signing certificate. A fork has no
+          # certificate, so the installer cannot be built here. Skipping it
+          # still produces a zip of the application, which is what gets shared.
+          HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'true' }}
+        run: npm run package-compass-nocompile
+
+      - name: List what was produced
+        if: always()
+        shell: bash
+        run: ls -la packages/compass/dist || echo "no dist directory"
+
+      - name: Upload the app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-query-builder-windows
+          path: |
+            packages/compass/dist/*.exe
+            packages/compass/dist/*.msi
+            packages/compass/dist/*.zip
+          if-no-files-found: warn
+          retention-days: 14
