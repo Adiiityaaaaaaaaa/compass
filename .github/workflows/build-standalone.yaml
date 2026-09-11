@@ -103,22 +103,29 @@ jobs:
             }
           }
           CONFIG
+          # --projectDir: electron-builder takes the version and metadata from
+          # package.json, and the monorepo root has none. The app's is in
+          # packages/compass.
+          # --publish never: on CI it otherwise tries to publish a release by
+          # itself. Publishing is a separate, deliberate step below.
           npx --yes electron-builder@26 \
-            --prepackaged "${{ steps.packaged.outputs.dir }}" \
+            --projectDir packages/compass \
+            --prepackaged "$(pwd)/${{ steps.packaged.outputs.dir }}" \
             --win portable \
-            --config electron-builder-standalone.json
+            --publish never \
+            --config "$(pwd)/electron-builder-standalone.json"
 
       - name: Show what was produced
         if: always()
         shell: bash
-        run: ls -la dist-standalone || echo "nothing produced"
+        run: ls -la packages/compass/dist-standalone || echo "nothing produced"
 
       - name: Upload the standalone executable
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: compass-query-builder-standalone
-          path: dist-standalone/*.exe
+          path: packages/compass/dist-standalone/*.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -129,4 +136,4 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ github.event.inputs.publish_tag }}" \
-            dist-standalone/*.exe --repo "${{ github.repository }}" --clobber
+            packages/compass/dist-standalone/*.exe --repo "${{ github.repository }}" --clobber
