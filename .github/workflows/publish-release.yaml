@@ -1,0 +1,76 @@
+# Publishes an already built installer as a release, without the file ever
+# leaving GitHub.
+#
+# Build artifacts are served from blob storage and expire; release assets are
+# served from the CDN, need no login, and are permanent. Moving the file
+# between them locally would mean downloading and re-uploading 180 MB. This
+# does it inside GitHub instead, so it takes seconds rather than an hour.
+name: Publish a release from a build
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run ID of the build whose installer should be published'
+        required: true
+      tag:
+        description: 'Tag for the release, e.g. v1.0.0'
+        required: true
+      title:
+        description: 'Release title'
+        required: false
+        default: 'Compass Query Builder'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create the release
+      actions: read # to read the artifact from the other run
+
+    steps:
+      - name: Fetch the installer from that build
+        uses: actions/download-artifact@v4
+        with:
+          name: compass-query-builder-setup
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: installer
+
+      - name: Show what was fetched
+        run: ls -la installer
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          cat > notes.md <<'NOTICE'
+          MongoDB Compass with a visual query builder added beside the documents list.
+
+          ## What is different from upstream Compass
+
+          - **Drag a field out of a document.** Field names are drag sources, carrying `field: value` in shell syntax, so they can be dropped into any editor.
+          - **Drop a field onto the query bar filter** to add it to the current filter. Fields accumulate: two fields are an implicit `$and`, the same field twice becomes `$in`.
+          - **A query builder panel beside the documents list.** Drop fields into Query, Projection or Sort and it compiles them into a real query. Collapsed until opened, so the documents view is otherwise unchanged.
+
+          The builder writes into the normal query bar inputs, so its query is the same query, in the same boxes, as one typed by hand. Rows, open state and width are kept per tab.
+
+          ## Installing
+
+          Download the `.exe` below and run it. It installs as **Compass Query Builder**, separately from any MongoDB Compass you already have, and does not disturb it.
+
+          ## Things to know
+
+          - **Unsigned.** Windows SmartScreen will warn on first run: click More info, then Run anyway.
+          - **Third party licence notices are a placeholder.** They are produced by MongoDB's release system, which a fork cannot reach. Fine for personal and team use, not for public redistribution.
+          - **SSPL v1**, the same licence as upstream Compass.
+          - Not affiliated with or endorsed by MongoDB, Inc.
+          NOTICE
+
+          gh release create "${{ github.event.inputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --target main \
+            --title "${{ github.event.inputs.title }} ${{ github.event.inputs.tag }}" \
+            --notes-file notes.md \
+            installer/*.exe
