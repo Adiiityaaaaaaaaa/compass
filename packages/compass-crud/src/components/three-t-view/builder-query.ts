@@ -324,3 +324,27 @@ export function compiledQueryToText(compiled: CompiledQuery): {
     sort: compiled.sort ? toJSString(compiled.sort) ?? '' : '',
   };
 }
+
+/**
+ * The query to hand to the query bar for a compiled builder state.
+ *
+ * Every property is always present. A property left out of the query is not
+ * cleared when the query is applied, it keeps whatever was applied before, so
+ * removing the last projection row would otherwise leave the old projection
+ * in effect. `undefined` is what clears a property.
+ */
+export function compiledQueryToAppliedQuery(compiled: CompiledQuery): {
+  filter: Record<string, unknown>;
+  project: Record<string, number> | undefined;
+  sort: Record<string, number> | undefined;
+  skip: number | undefined;
+  limit: number | undefined;
+} {
+  return {
+    filter: compiled.filter,
+    project: compiled.project ?? undefined,
+    sort: compiled.sort ?? undefined,
+    skip: compiled.skip ?? undefined,
+    limit: compiled.limit ?? undefined,
+  };
+}

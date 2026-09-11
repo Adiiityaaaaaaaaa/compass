@@ -34,9 +34,8 @@ const panel = css({
   flexDirection: 'column',
   gap: spacing[200],
   padding: spacing[200],
-  overflowY: 'auto',
-  height: '100%',
-  minWidth: spacing[1600] * 4,
+  // Scrolling belongs to the container that owns the pane height. Scrolling
+  // here as well produced a second scrollbar drawn over the sections.
 });
 
 const section = css({

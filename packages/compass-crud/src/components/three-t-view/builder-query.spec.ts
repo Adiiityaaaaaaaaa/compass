@@ -4,6 +4,7 @@ import type { BuilderState, ConditionRow } from './builder-query';
 import {
   EMPTY_BUILDER_STATE,
   compileBuilderState,
+  compiledQueryToAppliedQuery,
   parseValueText,
   valueToText,
 } from './builder-query';
@@ -269,6 +270,80 @@ describe('builder-query', function () {
       const compiled = compileBuilderState(state({ limit: 'lots' }));
       expect(compiled.limit).to.equal(null);
       expect(compiled.errors).to.deep.equal(['Limit must be a whole number']);
+    });
+  });
+
+  describe('compiledQueryToAppliedQuery', function () {
+    it('always includes every property, so removed rows are cleared', function () {
+      // A property missing from the applied query keeps its previous value,
+      // which is what made a removed projection stay in effect.
+      const query = compiledQueryToAppliedQuery(compileBuilderState(state()));
+      expect(Object.keys(query).sort()).to.deep.equal([
+        'filter',
+        'limit',
+        'project',
+        'skip',
+        'sort',
+      ]);
+      expect(query.project).to.equal(undefined);
+      expect(query.sort).to.equal(undefined);
+      expect(query.skip).to.equal(undefined);
+      expect(query.limit).to.equal(undefined);
+    });
+
+    it('clears the projection once its last row is removed', function () {
+      const withProjection = state({
+        projections: [
+          { id: 'p1', field: 'firstName', mode: 'include', enabled: true },
+        ],
+      });
+      expect(
+        compiledQueryToAppliedQuery(compileBuilderState(withProjection)).project
+      ).to.deep.equal({ firstName: 1 });
+
+      const removed = state({ projections: [] });
+      const query = compiledQueryToAppliedQuery(compileBuilderState(removed));
+      expect(query).to.have.property('project');
+      expect(query.project).to.equal(undefined);
+    });
+
+    it('clears the projection when the section is switched off', function () {
+      const query = compiledQueryToAppliedQuery(
+        compileBuilderState(
+          state({
+            projections: [
+              { id: 'p1', field: 'firstName', mode: 'include', enabled: true },
+            ],
+            projectionEnabled: false,
+          })
+        )
+      );
+      expect(query).to.have.property('project');
+      expect(query.project).to.equal(undefined);
+    });
+
+    it('passes through the values that are set', function () {
+      const query = compiledQueryToAppliedQuery(
+        compileBuilderState(
+          state({
+            conditions: [condition({})],
+            sorts: [
+              {
+                id: 's1',
+                field: 'timestamp',
+                direction: 'desc',
+                enabled: true,
+              },
+            ],
+            skip: '5',
+            limit: '20',
+          })
+        )
+      );
+      expect(query.filter).to.deep.equal({ status: 'shipped' });
+      expect(query.sort).to.deep.equal({ timestamp: -1 });
+      expect(query.skip).to.equal(5);
+      expect(query.limit).to.equal(20);
     });
   });
 });
