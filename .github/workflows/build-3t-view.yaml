@@ -48,6 +48,8 @@ jobs:
       - name: Package Compass
         env:
           DEBUG: 'hadron*,compass*'
+          # Required: the packaging target throws without it.
+          HADRON_DISTRIBUTION: compass
           HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'false' }}
         run: npm run package-compass
 
