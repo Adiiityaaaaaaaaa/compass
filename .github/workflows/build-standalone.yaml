@@ -1,0 +1,130 @@
+# Builds a single standalone executable: no installer, no zip, no folder.
+#
+# Compass is packaged by hadron-build into an application directory. That
+# directory is then wrapped into one self-extracting executable by
+# electron-builder's portable target, which unpacks to a temporary folder and
+# launches the app.
+#
+# The cost of that convenience is startup time. The application is around half
+# a gigabyte, and it is unpacked on every launch, so the first window takes
+# noticeably longer to appear than it does from an installed or unzipped copy.
+# Use the installer or the zip if that matters more than having one file.
+name: Build a standalone executable
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: 'Publish to this release tag as well, e.g. v1.0.0 (blank to only upload an artifact)'
+        required: false
+        default: ''
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 350
+
+    permissions:
+      contents: write # to attach to a release when asked
+
+    env:
+      HADRON_DISTRIBUTION: compass
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: 'npm'
+
+      - name: Install npm 11.16.0
+        run: npm install -g npm@11.16.0
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile workspace packages
+        run: npx lerna run bootstrap
+
+      - name: Build the application bundle
+        run: npm run webpack --workspace mongodb-compass -- --mode production
+
+      - name: Write a placeholder notices file
+        shell: bash
+        run: |
+          cat > packages/compass/THIRD-PARTY-NOTICES.md <<'NOTICE'
+          # Third party notices
+
+          This build was produced from a fork, outside MongoDB's release system,
+          which is where the third party notices are generated. They are not
+          included here.
+          NOTICE
+
+      # Produces the application directory. The installer is skipped: this
+      # workflow wraps the directory itself rather than installing it.
+      - name: Package the application directory
+        env:
+          HADRON_SKIP_INSTALLER: 'true'
+        run: npm run package-compass-nocompile
+
+      - name: Find the packaged directory
+        id: packaged
+        shell: bash
+        run: |
+          set -e
+          dir=$(find packages/compass/dist -maxdepth 1 -type d -name "*-win32-x64" | head -1)
+          if [ -z "$dir" ]; then
+            echo "No packaged directory found. Contents of dist:"
+            ls -la packages/compass/dist
+            exit 1
+          fi
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "Packaging from $dir"
+          ls "$dir" | head -5
+
+      - name: Wrap it into one executable
+        shell: bash
+        run: |
+          set -e
+          cat > electron-builder-standalone.json <<'CONFIG'
+          {
+            "appId": "com.compassquerybuilder.app",
+            "productName": "Compass Query Builder",
+            "directories": { "output": "dist-standalone" },
+            "win": { "target": ["portable"] },
+            "portable": {
+              "artifactName": "compass-query-builder-${version}-standalone.exe"
+            }
+          }
+          CONFIG
+          npx --yes electron-builder@26 \
+            --prepackaged "${{ steps.packaged.outputs.dir }}" \
+            --win portable \
+            --config electron-builder-standalone.json
+
+      - name: Show what was produced
+        if: always()
+        shell: bash
+        run: ls -la dist-standalone || echo "nothing produced"
+
+      - name: Upload the standalone executable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-query-builder-standalone
+          path: dist-standalone/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach it to a release
+        if: ${{ github.event.inputs.publish_tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "${{ github.event.inputs.publish_tag }}" \
+            dist-standalone/*.exe --repo "${{ github.repository }}" --clobber
