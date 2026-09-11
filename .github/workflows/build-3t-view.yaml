@@ -26,6 +26,11 @@ jobs:
     # is six hours; this leaves room to see a timeout rather than be killed.
     timeout-minutes: 350
 
+    env:
+      # Both the webpack config and the packaging step construct a build target
+      # from this, and each throws without it. Set once for the whole job.
+      HADRON_DISTRIBUTION: compass
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,8 +77,6 @@ jobs:
       - name: Package Compass
         env:
           DEBUG: 'hadron*,compass*'
-          # Required: the packaging target throws without it.
-          HADRON_DISTRIBUTION: compass
           HADRON_SKIP_INSTALLER: ${{ github.event.inputs.skip_installer || 'false' }}
         run: npm run package-compass-nocompile
 
