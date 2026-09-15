@@ -68,9 +68,21 @@ jobs:
           - Not affiliated with or endorsed by MongoDB, Inc.
           NOTICE
 
-          gh release create "${{ github.event.inputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --target main \
-            --title "${{ github.event.inputs.title }} ${{ github.event.inputs.tag }}" \
-            --notes-file notes.md \
-            installer/*.exe
+          TAG="${{ github.event.inputs.tag }}"
+          REPO="${{ github.repository }}"
+
+          # Add the files to the release when the tag already exists, create
+          # it otherwise, so the same workflow can publish a first build or
+          # add another form of the same one.
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG exists; adding the files to it"
+            gh release upload "$TAG" installer/* --repo "$REPO" --clobber
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --repo "$REPO" \
+              --target main \
+              --title "${{ github.event.inputs.title }} $TAG" \
+              --notes-file notes.md \
+              installer/*
+          fi
