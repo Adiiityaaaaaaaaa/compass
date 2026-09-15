@@ -100,7 +100,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: compass-query-builder-setup
-          # The single installer executable, not the unpacked application.
-          path: packages/compass/dist/*.exe
+          # The installer when one is built, the zipped application when the
+          # installer is skipped. Whichever the run produced.
+          path: |
+            packages/compass/dist/*.exe
+            packages/compass/dist/*.zip
           if-no-files-found: error
           retention-days: 14
