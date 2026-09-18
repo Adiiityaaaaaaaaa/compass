@@ -185,6 +185,10 @@ function spawnTarget(
       env: { ...process.env, ...colorEnv },
       // Create a new process group so we can kill the entire tree
       detached: true,
+      // On Windows, npm is a .cmd file; spawning it without a shell fails
+      // (Node requires shell: true to execute .cmd/.bat since the
+      // CVE-2024-27980 fix).
+      shell: process.platform === 'win32',
     },
   ];
 
