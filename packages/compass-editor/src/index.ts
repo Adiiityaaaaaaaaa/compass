@@ -24,3 +24,7 @@ export { createQueryWithHistoryAutocompleter } from './codemirror/query-autocomp
 export { useJsonSchemaAutocompleter } from './use-json-schema-autocompleter';
 export type { JsonSchemaAutocompleterResult } from './use-json-schema-autocompleter';
 export { useSafeIntegerLinter } from './codemirror/use-safe-integer-linter';
+export {
+  createJsonFieldDragGutter,
+  type JsonFieldPath,
+} from './codemirror/json-field-drag-gutter';

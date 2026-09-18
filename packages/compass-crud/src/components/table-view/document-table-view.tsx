@@ -29,7 +29,6 @@ import type {
   TableHeaderType,
 } from '../../stores/grid-store';
 import type {
-  CellDoubleClickedEvent,
   ColDef,
   ColumnApi,
   GridApi,
@@ -115,7 +114,6 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       gridOptions: {
         context,
         suppressDragLeaveHidesColumns: true,
-        onCellDoubleClicked: this.onCellDoubleClicked.bind(this),
         getRowHeight({ data: { isFooter } }: { data: { isFooter: boolean } }) {
           // deafult row style expects 28, "footer" row with leafygreen
           // components needs to be 38 (minimum button height + padding)
@@ -203,17 +201,6 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
     this.columnApi = params.columnApi;
 
     this.handleBreadcrumbChange();
-  }
-
-  /**
-   * Callback for when a cell is double clicked.
-   *
-   * @param {Object} event
-   *     node {RowNode} - the RowNode for the row in question
-   *     data {*} - the user provided data for the row in question
-   */
-  onCellDoubleClicked(event: CellDoubleClickedEvent) {
-    this.addFooter(event.node, event.data, 'editing');
   }
 
   /**
@@ -829,7 +816,11 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       },
 
       editable: function (params) {
-        if (!isEditable || params.node.data.state === 'deleting') {
+        // Cells only become editable once the row has explicitly been put
+        // into editing mode (via the row's "Edit Document" action). This
+        // also prevents ag-grid's built-in double-click-to-edit from
+        // starting an edit on a row that isn't already in editing mode.
+        if (!isEditable || params.node.data.state !== 'editing') {
           return false;
         } else if (path.length <= 1) {
           return true;

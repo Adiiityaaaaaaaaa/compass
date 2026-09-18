@@ -29,21 +29,12 @@ const maxWidth = css({
 
 export const KeyEditor: React.FunctionComponent<{
   editing?: boolean;
-  onEditStart(): void;
   value: string;
   valid: boolean;
   validationMessage: string | null;
   onChange(newVal: string): void;
   autoFocus?: boolean;
-}> = ({
-  editing,
-  value,
-  valid,
-  validationMessage,
-  onChange,
-  autoFocus,
-  onEditStart,
-}) => {
+}> = ({ editing, value, valid, validationMessage, onChange, autoFocus }) => {
   const darkMode = useDarkMode();
   // On Safari if a text is 5 mono-characters wide and is supposed to overflow /
   // get ellipse'd only when shorter than that, it would still overflow and get
@@ -105,10 +96,8 @@ export const KeyEditor: React.FunctionComponent<{
           {validationMessage}
         </Tooltip>
       ) : (
-        // Double-click is not accessible so no reason for this to be a button
         <div
           data-testid="hadron-document-clickable-key"
-          onDoubleClick={onEditStart}
           className={maxWidth}
           style={{ width }}
         >
@@ -121,7 +110,6 @@ export const KeyEditor: React.FunctionComponent<{
 
 export const ValueEditor: React.FunctionComponent<{
   editing?: boolean;
-  onEditStart(): void;
   type: keyof TypeCastMap;
   value: string;
   valid: boolean;
@@ -133,7 +121,6 @@ export const ValueEditor: React.FunctionComponent<{
   onBlur(): void;
 }> = ({
   editing,
-  onEditStart,
   type,
   value,
   valid,
@@ -145,13 +132,8 @@ export const ValueEditor: React.FunctionComponent<{
   onBlur,
 }) => {
   if (!editing) {
-    // Double-click is not accessible so no reason for this to be a button,
-    // users won't be able to interact with it anyway
     return (
-      <div
-        data-testid="hadron-document-clickable-value"
-        onDoubleClick={onEditStart}
-      >
+      <div data-testid="hadron-document-clickable-value">
         <BSONValue type={type} value={originalValue}></BSONValue>
       </div>
     );

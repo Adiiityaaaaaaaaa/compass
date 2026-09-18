@@ -694,10 +694,12 @@ describe('CSFLE / QE', function () {
           expect(result[field]).to.be.equal(toString(oldValueJS, false));
 
           const document = browser.$(Selectors.DocumentListEntry);
-          const value = document.$(
-            `${Selectors.HadronDocumentElement}[data-field="${field}"] ${Selectors.HadronDocumentClickableValue}`
+          await document.click({ button: 'right' });
+          const editDocumentMenuItem = browser.$(
+            Selectors.HadronDocumentContextMenuEditItem
           );
-          await value.doubleClick();
+          await editDocumentMenuItem.waitForDisplayed();
+          await editDocumentMenuItem.click();
 
           const input = document.$(
             `${Selectors.HadronDocumentElement}[data-field="${field}"] ${Selectors.HadronDocumentValueEditor}`
@@ -837,10 +839,12 @@ describe('CSFLE / QE', function () {
         await browser.runFindOperation('Documents', "{ name: 'Person Z' }");
 
         const originalDocument = browser.$(Selectors.DocumentListEntry);
-        const originalValue = originalDocument.$(
-          `${Selectors.HadronDocumentElement}[data-field="phoneNumber"] ${Selectors.HadronDocumentClickableValue}`
+        await originalDocument.click({ button: 'right' });
+        const originalEditDocumentMenuItem = browser.$(
+          Selectors.HadronDocumentContextMenuEditItem
         );
-        await originalValue.doubleClick();
+        await originalEditDocumentMenuItem.waitForDisplayed();
+        await originalEditDocumentMenuItem.click();
         const originalDocumentPhoneNumberEditor = originalDocument.$(
           `${Selectors.HadronDocumentElement}[data-field="phoneNumber"] ${Selectors.HadronDocumentValueEditor}`
         );
@@ -851,10 +855,12 @@ describe('CSFLE / QE', function () {
         await browser.runFindOperation('Documents', "{ name: 'La La' }");
 
         const copiedDocument = browser.$(Selectors.DocumentListEntry);
-        const copiedValue = copiedDocument.$(
-          `${Selectors.HadronDocumentElement}[data-field="phoneNumber"] ${Selectors.HadronDocumentClickableValue}`
+        await copiedDocument.click({ button: 'right' });
+        const copiedEditDocumentMenuItem = browser.$(
+          Selectors.HadronDocumentContextMenuEditItem
         );
-        await copiedValue.doubleClick();
+        await copiedEditDocumentMenuItem.waitForDisplayed();
+        await copiedEditDocumentMenuItem.click();
         const copiedDocumentPhoneNumberEditor = copiedDocument.$(
           `${Selectors.HadronDocumentElement}[data-field="phoneNumber"] ${Selectors.HadronDocumentValueEditor}`
         );

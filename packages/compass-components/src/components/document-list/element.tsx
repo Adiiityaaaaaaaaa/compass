@@ -316,7 +316,7 @@ const elementKey = css({
   maxWidth: '60%',
 });
 
-const elementKeyDraggable = css({
+const fieldDraggable = css({
   cursor: 'grab',
   '&:active': {
     cursor: 'grabbing',
@@ -554,15 +554,16 @@ export const HadronElement: React.FunctionComponent<{
     [element, key.value, value.value, type.value, onUpdateQuery, isFieldInQuery]
   );
 
-  // Dragging a field name puts "field: value" on the drag data, so it can be
-  // dropped into an aggregation stage or any editor outside Compass. The
-  // text/plain payload is deliberately identical to the "Copy field & value"
-  // context menu action, which remains the keyboard accessible way to do this.
+  // Dragging a field's key or its value puts "field: value" on the drag
+  // data, so it can be dropped into an aggregation stage or any editor
+  // outside Compass. The text/plain payload is deliberately identical to
+  // the "Copy field & value" context menu action, which remains the
+  // keyboard accessible way to do this.
   //
   // The same field also goes on the event in structured form, so that drop
   // targets inside Compass (the query bar) can use the BSON value rather than
   // parsing the display string back.
-  const onKeyDragStart = useCallback(
+  const onFieldDragStart = useCallback(
     (evt: React.DragEvent<HTMLDivElement>) => {
       // The row toggles expansion on click; dragging a field is not that.
       evt.stopPropagation();
@@ -644,16 +645,17 @@ export const HadronElement: React.FunctionComponent<{
     onClick: toggleExpanded,
   };
 
-  // While editing, the key is a text input and dragging it would fight with
-  // selecting the text inside it.
+  // While editing, the key/value are text inputs and dragging them would
+  // fight with selecting the text inside them.
   const keyDraggable = !editingEnabled;
+  const valueDraggable = !editingEnabled;
 
   const keyProps = {
     className: cx(
       elementKey,
       internal && elementKeyInternal,
       darkMode && elementKeyDarkMode,
-      keyDraggable && elementKeyDraggable
+      keyDraggable && fieldDraggable
     ),
   };
 
@@ -764,7 +766,7 @@ export const HadronElement: React.FunctionComponent<{
           {...keyProps}
           data-testid="hadron-document-element-key"
           draggable={keyDraggable}
-          onDragStart={keyDraggable ? onKeyDragStart : undefined}
+          onDragStart={keyDraggable ? onFieldDragStart : undefined}
         >
           {key.editable ? (
             <KeyEditor
@@ -774,15 +776,11 @@ export const HadronElement: React.FunctionComponent<{
               onChange={(newVal) => {
                 key.change(newVal);
               }}
-              // This autofocus will only trigger after user deliberately
-              // double-clicked on a field and so auto focusing the input is
-              // expected in this case
+              // This autofocus will only trigger when a new field was just
+              // added and so auto focusing the input is expected in this case
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus={autoFocus?.id === id && autoFocus?.type === 'key'}
               editing={editingEnabled}
-              onEditStart={() => {
-                onEditStart?.(element.uuid, 'key');
-              }}
             ></KeyEditor>
           ) : (
             <span>{key.value}</span>
@@ -802,8 +800,10 @@ export const HadronElement: React.FunctionComponent<{
           )}
         </div>
         <div
-          className={elementValue}
+          className={cx(elementValue, valueDraggable && fieldDraggable)}
           data-testid="hadron-document-element-value"
+          draggable={valueDraggable}
+          onDragStart={valueDraggable ? onFieldDragStart : undefined}
         >
           {value.editable ? (
             <ValueEditor
@@ -819,9 +819,6 @@ export const HadronElement: React.FunctionComponent<{
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus={autoFocus?.id === id && autoFocus?.type === 'value'}
               editing={editingEnabled}
-              onEditStart={() => {
-                onEditStart?.(element.uuid, 'value');
-              }}
               onFocus={() => {
                 value.startEdit();
               }}
@@ -836,11 +833,6 @@ export const HadronElement: React.FunctionComponent<{
                   ? 'hadron-document-clickable-value'
                   : undefined
               }
-              onDoubleClick={() => {
-                if (editable && !editingEnabled) {
-                  onEditStart?.(element.uuid, 'type');
-                }
-              }}
             >
               <BSONValue
                 type={type.value}

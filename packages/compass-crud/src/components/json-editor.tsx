@@ -20,8 +20,13 @@ import HadronDocument from 'hadron-document';
 import {
   CodemirrorMultilineEditor,
   useSafeIntegerLinter,
+  createJsonFieldDragGutter,
 } from '@mongodb-js/compass-editor';
-import type { EditorRef, Action } from '@mongodb-js/compass-editor';
+import type {
+  EditorRef,
+  Action,
+  JsonFieldPath,
+} from '@mongodb-js/compass-editor';
 import type { CrudActions } from '../stores/crud-store';
 import { useDocumentAutocompleter } from '../hooks/use-document-autocompleter';
 import { getSafeIntegerViolationMessage } from '../utils';
@@ -115,6 +120,32 @@ const JSONEditor: React.FunctionComponent<JSONEditorProps> = ({
   const handleCopy = useCallback(() => {
     copyToClipboard?.(doc, 'ejson');
   }, [copyToClipboard, doc]);
+
+  // Dragging a field's drag handle puts "field: value" on the drag data,
+  // the same way dragging a field works in the list/table document views.
+  const onFieldDragStart = useCallback(
+    (path: JsonFieldPath, event: DragEvent) => {
+      const element = doc.getChild(path);
+      if (!element || !event.dataTransfer) {
+        return;
+      }
+      event.dataTransfer.effectAllowed = 'copy';
+      event.dataTransfer.setData(
+        'text/plain',
+        `${element.currentKey}: ${element.toShellSyntax()}`
+      );
+      DocumentList.setDraggedDocumentField(event.dataTransfer, {
+        field: DocumentList.getNestedKeyPathForElement(element),
+        value: element.generateObject(),
+      });
+    },
+    [doc]
+  );
+
+  const fieldDragGutter = useMemo(
+    () => createJsonFieldDragGutter(onFieldDragStart),
+    [onFieldDragStart]
+  );
 
   const handleClone = useCallback(() => {
     const clonedDoc = doc.generateObject({
@@ -333,6 +364,7 @@ const JSONEditor: React.FunctionComponent<JSONEditorProps> = ({
         onExpand={editing ? undefined : toggleExpandCollapse}
         expanded={expanded}
         linter={safeIntegerLinter}
+        customExtensions={editing ? undefined : [fieldDragGutter]}
       />
       <DocumentList.DocumentEditActionsFooter
         doc={doc}

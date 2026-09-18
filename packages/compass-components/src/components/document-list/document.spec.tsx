@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { expect } from 'chai';
 import {
   render,
@@ -11,21 +11,6 @@ import {
 } from '@mongodb-js/testing-library-compass';
 import HadronDocument from 'hadron-document';
 import Document from './document';
-
-const EditableDoc = ({ doc }: { doc: HadronDocument }) => {
-  const [editing, setEditing] = useState(false);
-
-  return (
-    <Document
-      value={doc}
-      editable
-      editing={editing}
-      onEditStart={() => {
-        setEditing(true);
-      }}
-    ></Document>
-  );
-};
 
 describe('Document', function () {
   let doc: HadronDocument;
@@ -243,61 +228,6 @@ describe('Document', function () {
 
     expect(doc.get('null_value')?.currentValue?.valueOf()).to.eq('foo bar');
     expect(doc.get('null_value')?.currentType).to.eq('String');
-  });
-
-  it('should autofocus key editor when double-clicking key', function () {
-    render(<EditableDoc doc={doc}></EditableDoc>);
-
-    const el = document.querySelector<HTMLElement>(
-      `[data-id="${doc.get('str')?.uuid}"]`
-    );
-    if (!el) {
-      throw new Error('Could not find element');
-    }
-
-    userEvent.dblClick(within(el).getByTestId('hadron-document-clickable-key'));
-
-    const editor = within(el).getByTestId('hadron-document-key-editor');
-
-    expect(editor).to.eq(document.activeElement);
-  });
-
-  it('should autofocus value editor when double-clicking value', function () {
-    render(<EditableDoc doc={doc}></EditableDoc>);
-
-    const el = document.querySelector<HTMLElement>(
-      `[data-id="${doc.get('str')?.uuid}"]`
-    );
-    if (!el) {
-      throw new Error('Could not find element');
-    }
-
-    userEvent.dblClick(
-      within(el).getByTestId('hadron-document-clickable-value')
-    );
-
-    const editor = within(el).getByTestId('hadron-document-value-editor');
-
-    expect(editor).to.eq(document.activeElement);
-  });
-
-  it('should autofocus type editor when double-clicking a non-editable value', function () {
-    render(<EditableDoc doc={doc}></EditableDoc>);
-
-    const el = document.querySelector<HTMLElement>(
-      `[data-id="${doc.get('null_value')?.uuid}"]`
-    );
-    if (!el) {
-      throw new Error('Could not find element');
-    }
-
-    userEvent.dblClick(
-      within(el).getByTestId('hadron-document-clickable-value')
-    );
-
-    const editor = within(el).getByTestId('hadron-document-type-editor');
-
-    expect(editor).to.eq(document.activeElement);
   });
 
   it('should render doc in expanded/collapsed mode when the entire doc is expanded/collapsed', function () {

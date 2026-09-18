@@ -469,10 +469,12 @@ FindIterable<Document> result = collection.find(filter);`);
       /^_id: ObjectId\('[a-f0-9]{24}'\) i: 31 j: 0$/
     );
 
-    const valueElement = document.$(
-      `${Selectors.HadronDocumentElement}:last-child ${Selectors.HadronDocumentClickableValue}`
+    await document.click({ button: 'right' });
+    const editDocumentMenuItem = browser.$(
+      Selectors.HadronDocumentContextMenuEditItem
     );
-    await valueElement.doubleClick();
+    await editDocumentMenuItem.waitForDisplayed();
+    await editDocumentMenuItem.click();
 
     const input = document.$(
       `${Selectors.HadronDocumentElement}:last-child ${Selectors.HadronDocumentValueEditor}`
@@ -673,8 +675,10 @@ FindIterable<Document> result = collection.find(filter);`);
       /^ObjectId\('[a-f0-9]{24}('\))? 33 0$/ // ') now gets cut off. sometimes.
     );
 
-    const value = document.$('[col-id="j"] .element-value');
-    await value.doubleClick();
+    const editButton = document.$(
+      `[col-id="$rowActions"] ${Selectors.TableViewRowActionsEditButton}`
+    );
+    await browser.clickVisible(editButton);
 
     const input = document.$(
       '[col-id="j"] [data-testid="table-view-cell-editor-value-input"]'
@@ -1036,8 +1040,10 @@ FindIterable<Document> result = collection.find(filter);`);
         await document.waitForDisplayed();
 
         // enter edit mode
-        const value = document.$('[col-id="phone"] .element-value');
-        await value.doubleClick();
+        const editButton = document.$(
+          `[col-id="$rowActions"] ${Selectors.TableViewRowActionsEditButton}`
+        );
+        await browser.clickVisible(editButton);
 
         // remove the required field
         await browser.clickVisible(

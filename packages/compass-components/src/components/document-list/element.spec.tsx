@@ -669,5 +669,67 @@ describe('HadronElement', function () {
           .getAttribute('draggable')
       ).to.equal('false');
     });
+
+    it('makes the field value draggable when not editing', function () {
+      const doc = new HadronDocument({ field: 'value' });
+
+      render(
+        <HadronElement
+          value={doc.get('field')!}
+          editable={true}
+          editingEnabled={false}
+          lineNumberSize={1}
+          onAddElement={() => {}}
+        />
+      );
+
+      expect(
+        screen
+          .getByTestId('hadron-document-element-value')
+          .getAttribute('draggable')
+      ).to.equal('true');
+    });
+
+    it('puts "field: value" on the drag data when dragging the value', function () {
+      const doc = new HadronDocument({ field: 'value' });
+
+      render(
+        <HadronElement
+          value={doc.get('field')!}
+          editable={true}
+          editingEnabled={false}
+          lineNumberSize={1}
+          onAddElement={() => {}}
+        />
+      );
+
+      const dataTransfer = fakeDataTransfer();
+      fireEvent.dragStart(screen.getByTestId('hadron-document-element-value'), {
+        dataTransfer,
+      });
+
+      expect(dataTransfer.getData('text/plain')).to.equal("field: 'value'");
+      expect(dataTransfer.effectAllowed).to.equal('copy');
+    });
+
+    it('does not make the field value draggable while editing', function () {
+      const doc = new HadronDocument({ field: 'value' });
+
+      render(
+        <HadronElement
+          value={doc.get('field')!}
+          editable={true}
+          editingEnabled={true}
+          lineNumberSize={1}
+          onAddElement={() => {}}
+        />
+      );
+
+      expect(
+        screen
+          .getByTestId('hadron-document-element-value')
+          .getAttribute('draggable')
+      ).to.equal('false');
+    });
   });
 });

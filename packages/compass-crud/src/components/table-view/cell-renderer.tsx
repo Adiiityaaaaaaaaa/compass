@@ -172,6 +172,22 @@ class CellRenderer
     this.forceUpdate();
   };
 
+  // Dragging a cell's value puts "field: value" on the drag data, so it can
+  // be dropped into an aggregation stage or any editor outside Compass, the
+  // same way dragging a field works in the list view.
+  handleDragStart = (evt: React.DragEvent<HTMLDivElement>) => {
+    evt.stopPropagation();
+    evt.dataTransfer.effectAllowed = 'copy';
+    evt.dataTransfer.setData(
+      'text/plain',
+      `${this.element.currentKey}: ${this.element.toShellSyntax()}`
+    );
+    DocumentList.setDraggedDocumentField(evt.dataTransfer, {
+      field: DocumentList.getNestedKeyPathForElement(this.element),
+      value: this.element.generateObject(),
+    });
+  };
+
   handleUndo = (event: React.MouseEvent) => {
     event.stopPropagation();
     const oid = this.props.node.data.hadronDocument.getStringId();
@@ -319,6 +335,9 @@ class CellRenderer
     let className = BEM_BASE;
     let canUndo = false;
     let canExpand = false;
+    // There's nothing meaningful to drag when the column doesn't apply to
+    // this row, or the field doesn't have a value.
+    let draggable = false;
 
     if (!this.editable) {
       element = '';
@@ -327,6 +346,7 @@ class CellRenderer
       element = 'No field';
       className = `${className}-${EMPTY}`;
     } else if (!this.element.isCurrentTypeValid()) {
+      draggable = true;
       element = this.renderInvalidCell();
       className = `${className}-${INVALID}`;
       canUndo = true;
@@ -335,6 +355,7 @@ class CellRenderer
       className = `${className}-${DELETED}`;
       canUndo = true;
     } else {
+      draggable = true;
       element = this.renderValidCell();
       if (this.element.isAdded()) {
         className = `${className}-${ADDED}`;
@@ -361,6 +382,8 @@ class CellRenderer
             className={className}
             onClick={this.handleClicked.bind(this)}
             role="button"
+            draggable={draggable}
+            onDragStart={draggable ? this.handleDragStart : undefined}
           >
             {this.renderUndo(canUndo, canExpand)}
             {this.renderExpand(canExpand)}

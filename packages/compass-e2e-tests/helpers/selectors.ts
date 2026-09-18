@@ -772,6 +772,10 @@ export const HadronDocumentAddChildButton =
   '[data-testid="hadron-document-add-child"]';
 export const HadronDocumentAddSibling =
   '[data-testid="hadron-document-add-sibling"]';
+export const HadronDocumentContextMenuEditItem =
+  '[data-testid="context-menu"] [data-text="Edit document"]';
+export const TableViewRowActionsEditButton =
+  '[data-testid="table-view-row-actions-edit-action"]';
 export const HadronDocumentRevertElement =
   '[data-testid="hadron-document-revert"]';
 export const HadronDocumentRemoveElement =
