@@ -28,6 +28,8 @@ import { BulkActionsMenu } from './bulk-actions-menu';
 import { QueryBar } from '@mongodb-js/compass-query-bar';
 import { useConnectionInfoRef } from '@mongodb-js/compass-connections/provider';
 import { DOCUMENT_NARROW_ICON_BREAKPOINT } from '../constants/document-narrow-icon-breakpoint';
+import CollectionHistoryButton from './collection-history-button';
+import type { DeletedDocument } from '@mongodb-js/my-deleted-documents-storage/provider';
 
 const crudQueryBarStyles = css({
   width: '100%',
@@ -167,6 +169,10 @@ export type CrudToolbarProps = {
   querySkip?: number;
   docsPerPage: number;
   updateMaxDocumentsPerPage: (docsPerPage: number) => void;
+  loadDeletedDocuments: () => Promise<DeletedDocument[]>;
+  restoreDeletedDocument: (
+    entryId: string
+  ) => Promise<{ success: boolean; error?: string }>;
 };
 
 const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
@@ -202,6 +208,8 @@ const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
   querySkip,
   docsPerPage,
   updateMaxDocumentsPerPage,
+  loadDeletedDocuments,
+  restoreDeletedDocument,
 }) => {
   const track = useTelemetry();
   const connectionInfoRef = useConnectionInfoRef();
@@ -381,6 +389,12 @@ const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
           >
             <span className={exportCodeButtonTextStyles}>Export Code</span>
           </Button>
+          {!readonly && (
+            <CollectionHistoryButton
+              loadDeletedDocuments={loadDeletedDocuments}
+              restoreDeletedDocument={restoreDeletedDocument}
+            />
+          )}
           {insights && <SignalPopover signals={insights} />}
         </div>
         <div className={toolbarRightActionStyles}>

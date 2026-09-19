@@ -28,6 +28,7 @@ import {
   favoriteQueryStorageAccessLocator,
   recentQueryStorageAccessLocator,
 } from '@mongodb-js/my-queries-storage/provider';
+import { deletedDocumentsStorageAccessLocator } from '@mongodb-js/my-deleted-documents-storage/provider';
 import { fieldStoreServiceLocator } from '@mongodb-js/compass-field-store';
 import { queryBarServiceLocator } from '@mongodb-js/compass-query-bar';
 import { telemetryLocator } from '@mongodb-js/compass-telemetry/provider';
@@ -60,6 +61,7 @@ const CompassDocumentsPluginProvider = registerCompassPlugin(
     track: telemetryLocator,
     favoriteQueryStorageAccess: favoriteQueryStorageAccessLocator,
     recentQueryStorageAccess: recentQueryStorageAccessLocator,
+    deletedDocumentsStorageAccess: deletedDocumentsStorageAccessLocator,
     fieldStoreService: fieldStoreServiceLocator,
     connectionInfoRef: connectionInfoRefLocator,
     connectionScopedAppRegistry:

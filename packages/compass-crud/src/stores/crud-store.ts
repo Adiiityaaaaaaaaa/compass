@@ -15,13 +15,18 @@ import type { PreferencesAccess } from 'compass-preferences-model/provider';
 import { capMaxTimeMSAtPreferenceLimit } from 'compass-preferences-model/provider';
 import type { Stage } from '@mongodb-js/explain-plan-helper';
 import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
-import { EJSON } from 'bson';
+import { EJSON, UUID } from 'bson';
 import type {
   FavoriteQueryStorage,
   FavoriteQueryStorageAccess,
   RecentQueryStorage,
   RecentQueryStorageAccess,
 } from '@mongodb-js/my-queries-storage/provider';
+import type {
+  DeletedDocument,
+  DeletedDocumentsStorageAccess,
+  DeletedDocumentsStorageInterface,
+} from '@mongodb-js/my-deleted-documents-storage/provider';
 
 import {
   countDocuments,
@@ -107,6 +112,10 @@ export type CrudActions = {
   openQueryExportToLanguageDialog(): void;
   openDeleteQueryExportToLanguageDialog(): void;
   saveUpdateQuery(name: string): Promise<void>;
+  loadDeletedDocuments(): Promise<DeletedDocument[]>;
+  restoreDeletedDocument(
+    entryId: string
+  ): Promise<{ success: boolean; error?: string }>;
 };
 
 const DOCUMENT_VIEWS = ['List', 'JSON', 'Table'] as const;
@@ -119,6 +128,11 @@ const INITIAL_BULK_UPDATE_TEXT = `{
 
   },
 }`;
+
+// A bulk delete could match millions of documents; snapshotting all of them
+// locally for recovery isn't feasible. Above this many matches, the delete
+// still goes through as normal, it just isn't recoverable afterwards.
+const BULK_DELETE_SNAPSHOT_LIMIT = 1000;
 
 export const fetchDocuments: (
   dataService: DataService,
@@ -394,6 +408,7 @@ class CrudStoreImpl
   localAppRegistry: Pick<AppRegistry, 'on' | 'emit' | 'removeListener'>;
   favoriteQueriesStorage?: FavoriteQueryStorage;
   recentQueriesStorage?: RecentQueryStorage;
+  deletedDocumentsStorage?: DeletedDocumentsStorageInterface;
   fieldStoreService: FieldStoreService;
   logger: Logger;
   track: TrackFunction;
@@ -421,12 +436,14 @@ class CrudStoreImpl
     > & {
       favoriteQueryStorage?: FavoriteQueryStorage;
       recentQueryStorage?: RecentQueryStorage;
+      deletedDocumentsStorage?: DeletedDocumentsStorageInterface;
     }
   ) {
     super(options);
     this.listenables = options.actions as any; // TODO: The types genuinely mismatch here
     this.favoriteQueriesStorage = services.favoriteQueryStorage;
     this.recentQueriesStorage = services.recentQueryStorage;
+    this.deletedDocumentsStorage = services.deletedDocumentsStorage;
     this.dataService = services.dataService;
     this.localAppRegistry = services.localAppRegistry;
     this.preferences = services.preferences;
@@ -601,6 +618,7 @@ class CrudStoreImpl
     if (id !== undefined) {
       doc.onRemoveStart();
       try {
+        await this.snapshotDeletedDocuments('single', [doc.generateObject()]);
         await this.dataService.deleteOne(this.state.ns, { _id: id as any });
         // emit on the document(list view) and success state(json view)
         doc.onRemoveSuccess();
@@ -625,6 +643,83 @@ class CrudStoreImpl
     } else {
       doc.onRemoveError(DELETE_ERROR);
       this.trigger(this.state);
+    }
+  }
+
+  /**
+   * Best-effort local snapshot of documents that are about to be deleted, so
+   * they can be restored later via the "Recently Deleted" panel. Never
+   * throws: a failure here should never block the actual delete.
+   */
+  private async snapshotDeletedDocuments(
+    operation: 'single' | 'bulk',
+    documents: BSONObject[]
+  ): Promise<void> {
+    if (!this.deletedDocumentsStorage || documents.length === 0) {
+      return;
+    }
+    try {
+      const _batchId = operation === 'bulk' ? new UUID().toString() : undefined;
+      await this.deletedDocumentsStorage.saveManyDeleted(
+        documents.map((document) => ({
+          _ns: this.state.ns,
+          _connectionId: this.connectionInfoRef.current.id,
+          _operation: operation,
+          _batchId,
+          document,
+        }))
+      );
+    } catch (error) {
+      this.logger.log.warn(
+        mongoLogId(1_001_000_450),
+        'Documents',
+        'Failed to snapshot deleted document(s) for recovery',
+        { message: (error as Error).message }
+      );
+    }
+  }
+
+  /**
+   * Load the recently deleted documents available to restore for the
+   * current namespace, most recent first.
+   */
+  async loadDeletedDocuments(): Promise<DeletedDocument[]> {
+    if (!this.deletedDocumentsStorage) {
+      return [];
+    }
+    return await this.deletedDocumentsStorage.loadAll(this.state.ns);
+  }
+
+  /**
+   * Restore a previously deleted document, re-inserting it with its
+   * original _id.
+   */
+  async restoreDeletedDocument(
+    entryId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.deletedDocumentsStorage) {
+      return { success: false, error: 'Recovery is not available.' };
+    }
+    const entries = await this.deletedDocumentsStorage.loadAll(this.state.ns);
+    const entry = entries.find(
+      (candidate: DeletedDocument) => candidate._id === entryId
+    );
+    if (!entry) {
+      return {
+        success: false,
+        error: 'This document is no longer available to restore.',
+      };
+    }
+    try {
+      await this.dataService.insertOne(this.state.ns, entry.document);
+      await this.deletedDocumentsStorage.delete(entryId);
+      void this.refreshDocuments();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: this.getWriteError(error as Error).message,
+      };
     }
   }
 
@@ -2007,6 +2102,43 @@ class CrudStoreImpl
     });
   }
 
+  /**
+   * Snapshot documents matched by a bulk delete's filter for recovery,
+   * unless there are more than BULK_DELETE_SNAPSHOT_LIMIT of them (in which
+   * case the delete still proceeds, just without recovery for this batch).
+   * Fetching capped at the limit + 1 both bounds the request and avoids
+   * relying on the document count, which can be stale or unknown.
+   */
+  private async snapshotBulkDeletedDocuments(
+    filter: Parameters<DataService['deleteMany']>[1]
+  ): Promise<void> {
+    if (!this.deletedDocumentsStorage) {
+      return;
+    }
+    try {
+      const matches = await this.dataService.find(this.state.ns, filter, {
+        limit: BULK_DELETE_SNAPSHOT_LIMIT + 1,
+      });
+      if (matches.length > BULK_DELETE_SNAPSHOT_LIMIT) {
+        this.logger.log.info(
+          mongoLogId(1_001_000_451),
+          'Documents',
+          'Skipping recovery snapshot for bulk delete: too many matching documents',
+          { limit: BULK_DELETE_SNAPSHOT_LIMIT }
+        );
+        return;
+      }
+      await this.snapshotDeletedDocuments('bulk', matches);
+    } catch (error) {
+      this.logger.log.warn(
+        mongoLogId(1_001_000_452),
+        'Documents',
+        'Failed to snapshot documents for bulk delete recovery',
+        { message: (error as Error).message }
+      );
+    }
+  }
+
   async runBulkDelete() {
     const query = this.queryBar.getLastAppliedQuery('crud');
 
@@ -2030,6 +2162,7 @@ class CrudStoreImpl
       this.bulkDeleteInProgress();
       const { filter = {} } = query;
       try {
+        await this.snapshotBulkDeletedDocuments(filter);
         await this.dataService.deleteMany(this.state.ns, filter);
         this.track(
           'Bulk Delete Executed',
@@ -2123,6 +2256,7 @@ export type DocumentsPluginServices = {
   track: TrackFunction;
   favoriteQueryStorageAccess?: FavoriteQueryStorageAccess;
   recentQueryStorageAccess?: RecentQueryStorageAccess;
+  deletedDocumentsStorageAccess?: DeletedDocumentsStorageAccess;
   fieldStoreService: FieldStoreService;
   connectionInfoRef: ConnectionInfoRef;
   connectionScopedAppRegistry: ConnectionScopedAppRegistry<EmittedAppRegistryEvents>;
@@ -2142,6 +2276,7 @@ export function activateDocumentsPlugin(
     track,
     favoriteQueryStorageAccess,
     recentQueryStorageAccess,
+    deletedDocumentsStorageAccess,
     fieldStoreService,
     connectionInfoRef,
     connectionScopedAppRegistry,
@@ -2164,6 +2299,7 @@ export function activateDocumentsPlugin(
         connectionInfoRef,
         favoriteQueryStorage: favoriteQueryStorageAccess?.getStorage(),
         recentQueryStorage: recentQueryStorageAccess?.getStorage(),
+        deletedDocumentsStorage: deletedDocumentsStorageAccess?.getStorage(),
         fieldStoreService,
         connectionScopedAppRegistry,
         queryBar,

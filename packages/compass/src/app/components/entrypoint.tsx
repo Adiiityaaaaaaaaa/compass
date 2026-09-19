@@ -22,6 +22,11 @@ import {
   type RecentQueryStorageAccess,
   type PipelineStorageAccess,
 } from '@mongodb-js/my-queries-storage/provider';
+import { createElectronDeletedDocumentsStorage } from '@mongodb-js/my-deleted-documents-storage/electron';
+import {
+  DeletedDocumentsStorageProvider,
+  type DeletedDocumentsStorageAccess,
+} from '@mongodb-js/my-deleted-documents-storage/provider';
 import { createLogger } from '@mongodb-js/compass-logging';
 import { LoggerProvider } from '@mongodb-js/compass-logging/provider';
 import { TelemetryProvider } from '@mongodb-js/compass-telemetry/provider';
@@ -95,16 +100,26 @@ export const WithStorageProviders: React.FC = ({ children }) => {
       return createElectronRecentQueryStorage({ basepath: options?.basepath });
     },
   });
+  const deletedDocumentsStorage =
+    useInitialValue<DeletedDocumentsStorageAccess>({
+      getStorage(options) {
+        return createElectronDeletedDocumentsStorage({
+          basepath: options?.basepath,
+        });
+      },
+    });
 
   return (
     <PipelineStorageProvider value={pipelineStorage}>
       <FavoriteQueryStorageProvider value={favoriteQueryStorage}>
         <RecentQueryStorageProvider value={recentQueryStorage}>
-          <WorkspacesStorageServiceProviderDesktop>
-            <DataModelStorageServiceProviderElectron>
-              {children}
-            </DataModelStorageServiceProviderElectron>
-          </WorkspacesStorageServiceProviderDesktop>
+          <DeletedDocumentsStorageProvider value={deletedDocumentsStorage}>
+            <WorkspacesStorageServiceProviderDesktop>
+              <DataModelStorageServiceProviderElectron>
+                {children}
+              </DataModelStorageServiceProviderElectron>
+            </WorkspacesStorageServiceProviderDesktop>
+          </DeletedDocumentsStorageProvider>
         </RecentQueryStorageProvider>
       </FavoriteQueryStorageProvider>
     </PipelineStorageProvider>

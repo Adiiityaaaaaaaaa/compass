@@ -236,6 +236,7 @@
     "@mongodb-js/get-os-info": "^0.7.1",
     "@mongodb-js/mocha-config-compass": "^1.8.0",
     "@mongodb-js/mongodb-downloader": "^2.0.1",
+    "@mongodb-js/my-deleted-documents-storage": "^0.1.0",
     "@mongodb-js/my-queries-storage": "^1.2.0",
     "@mongodb-js/prettier-config-compass": "^1.2.9",
     "@mongodb-js/sbom-tools": "^0.10.23",

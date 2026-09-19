@@ -19,6 +19,7 @@ const validUserDataTypes = [
   'Connections',
   'AtlasState',
   'ShellHistory',
+  'DeletedDocuments',
 ] as const;
 
 export type UserDataType = (typeof validUserDataTypes)[number];

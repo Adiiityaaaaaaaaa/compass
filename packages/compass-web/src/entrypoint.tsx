@@ -99,6 +99,11 @@ import {
   type RecentQueryStorageAccess,
   type PipelineStorageAccess,
 } from '@mongodb-js/my-queries-storage/provider';
+import { createWebDeletedDocumentsStorage } from '@mongodb-js/my-deleted-documents-storage/web';
+import {
+  DeletedDocumentsStorageProvider,
+  type DeletedDocumentsStorageAccess,
+} from '@mongodb-js/my-deleted-documents-storage/provider';
 import { createServiceProvider } from '@mongodb-js/compass-app-registry';
 import { CompassAssistantProvider } from '@mongodb-js/compass-assistant';
 import { CompassAssistantDrawerWithConnections } from './compass-assistant-drawer';
@@ -233,17 +238,30 @@ const WithStorageProviders = createServiceProvider(
         });
       },
     });
+    const deletedDocumentsStorage = useRef<DeletedDocumentsStorageAccess>({
+      getStorage() {
+        return createWebDeletedDocumentsStorage({
+          orgId,
+          projectId,
+          atlasService,
+        });
+      },
+    });
     return (
       <PipelineStorageProvider value={pipelineStorage.current}>
         <FavoriteQueryStorageProvider value={favoriteQueryStorage.current}>
           <RecentQueryStorageProvider value={recentQueryStorage.current}>
-            <WorkspacesStorageServiceProviderWeb
-              orgId={orgId}
-              projectId={projectId}
-              atlasService={atlasService}
+            <DeletedDocumentsStorageProvider
+              value={deletedDocumentsStorage.current}
             >
-              {children}
-            </WorkspacesStorageServiceProviderWeb>
+              <WorkspacesStorageServiceProviderWeb
+                orgId={orgId}
+                projectId={projectId}
+                atlasService={atlasService}
+              >
+                {children}
+              </WorkspacesStorageServiceProviderWeb>
+            </DeletedDocumentsStorageProvider>
           </RecentQueryStorageProvider>
         </FavoriteQueryStorageProvider>
       </PipelineStorageProvider>
