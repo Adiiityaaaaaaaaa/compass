@@ -142,7 +142,7 @@
     "install": "node scripts/download-fonts.js && node scripts/download-csfle.js",
     "electron-rebuild": "node scripts/electron-rebuild.js",
     "prestart": "npm run electron-rebuild && npm run compile --workspace=@mongodb-js/webpack-config-compass",
-    "start": "HADRON_DISTRIBUTION=${HADRON_DISTRIBUTION:-compass} npm run webpack serve -- --mode development",
+    "start": "node scripts/start-dev-server.js",
     "test-electron": "npm run test-main && npm run test-renderer",
     "test-main": "xvfb-maybe electron-mocha --no-sandbox \"./src/main/**/*.spec.*\"  \"./src/main/**/*.test.*\"",
     "test-renderer": "xvfb-maybe electron-mocha --no-sandbox --config ./.mocharc.renderer.js \"./src/app/**/*.spec.*\"",

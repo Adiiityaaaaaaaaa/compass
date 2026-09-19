@@ -166,11 +166,18 @@ export class WebpackPluginStartElectron {
     this.logger.info(
       '- Ctrl+A to restart the main process with extra arguments'
     );
+    // If this is running inside an Electron-hosted terminal (e.g. VS Code),
+    // ELECTRON_RUN_AS_NODE will be set in the inherited environment, which
+    // would make the spawned Electron binary run as plain Node instead of
+    // a real Electron app (surfacing as e.g. `electron.nativeImage` being
+    // undefined in the main process).
+    const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...spawnEnv } =
+      process.env;
     this.electronProcess = spawn(
       // XXX: in non-electron environment this import returns path to the binary
       electronBinaryPath as unknown as string,
       [this.appPath, ...(extraArgs ?? [])],
-      { stdio: 'inherit', env: process.env }
+      { stdio: 'inherit', env: spawnEnv }
     );
     let stderr = '';
     this.electronProcess.stderr
