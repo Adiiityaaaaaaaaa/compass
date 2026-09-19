@@ -12,6 +12,7 @@ import HadronDocument from 'hadron-document';
 import {
   CodemirrorMultilineEditor,
   createFindInDocumentExtension,
+  openSearchPanel,
 } from '@mongodb-js/compass-editor';
 import type { CrudActions } from '../../stores/crud-store';
 import { useTelemetry } from '@mongodb-js/compass-telemetry/provider';
@@ -135,6 +136,11 @@ export const ExpandedDocumentEditorModal: React.FunctionComponent<
               formattable={false}
               minLines={30}
               customExtensions={findExtension}
+              showFoldGutter={false}
+              initialJSONFoldAll={false}
+              onLoad={(view) => {
+                openSearchPanel(view);
+              }}
             />
           </div>
           <DocumentList.DocumentEditActionsFooter

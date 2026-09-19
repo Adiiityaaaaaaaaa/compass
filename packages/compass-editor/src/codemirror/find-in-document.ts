@@ -1,7 +1,9 @@
-import { search, searchKeymap } from '@codemirror/search';
+import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { keymap, EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { fontFamilies, palette, spacing } from '@mongodb-js/compass-components';
+
+export { openSearchPanel };
 
 function getSearchPanelTheme(dark: boolean): Extension {
   const background = dark ? palette.gray.dark3 : palette.gray.light3;

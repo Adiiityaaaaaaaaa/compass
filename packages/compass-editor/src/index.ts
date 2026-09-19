@@ -28,4 +28,7 @@ export {
   createJsonFieldDragGutter,
   type JsonFieldPath,
 } from './codemirror/json-field-drag-gutter';
-export { createFindInDocumentExtension } from './codemirror/find-in-document';
+export {
+  createFindInDocumentExtension,
+  openSearchPanel,
+} from './codemirror/find-in-document';
