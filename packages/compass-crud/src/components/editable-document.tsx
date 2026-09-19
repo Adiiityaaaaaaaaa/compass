@@ -20,6 +20,7 @@ export type EditableDocumentProps = {
   copyToClipboard?: CrudActions['copyToClipboard'];
   onUpdateQuery?: (field: string, value: unknown) => void;
   query?: Record<string, unknown>;
+  onOpenExpandedEditor?: (doc: Document) => void;
 };
 
 type EditableDocumentState = {
@@ -216,6 +217,10 @@ class EditableDocument extends React.Component<
    *
    * @returns {Component} The actions component.
    */
+  handleOpenExpandedEditor = () => {
+    this.props.onOpenExpandedEditor?.(this.props.doc);
+  };
+
   renderActions() {
     if (!this.state.editing && !this.state.deleting) {
       return (
@@ -226,6 +231,11 @@ class EditableDocument extends React.Component<
           onClone={this.handleClone.bind(this)}
           onExpand={this.handleExpandAll.bind(this)}
           expanded={this.state.expanded}
+          onExpandDocument={
+            this.props.onOpenExpandedEditor
+              ? this.handleOpenExpandedEditor
+              : undefined
+          }
           insights={getInsightsForDocument(this.props.doc)}
         />
       );

@@ -4,6 +4,7 @@ import { render, screen } from '@mongodb-js/testing-library-compass';
 import JSONEditor from './json-editor';
 import HadronDocument from 'hadron-document';
 import { setCodemirrorEditorValue } from '@mongodb-js/compass-editor';
+import { ExpandedDocumentEditorProvider } from './expanded-document-editor/expanded-document-editor-context';
 
 function renderJSONEditor(
   props: Partial<ComponentProps<typeof JSONEditor>> = {}
@@ -11,7 +12,13 @@ function renderJSONEditor(
   const doc = new HadronDocument({});
   doc.editing = true;
   return render(
-    <JSONEditor doc={doc} editable namespace="airbnb.listings" {...props} />
+    <ExpandedDocumentEditorProvider
+      isEditable
+      mode="json"
+      replaceDocument={() => Promise.resolve()}
+    >
+      <JSONEditor doc={doc} editable namespace="airbnb.listings" {...props} />
+    </ExpandedDocumentEditorProvider>
   );
 }
 

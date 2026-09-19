@@ -45,6 +45,10 @@ import {
   useDocumentEditsTelemetry,
   type DocumentEditsMode,
 } from '../hooks/use-document-edits-telemetry';
+import {
+  ExpandedDocumentEditorProvider,
+  useOpenExpandedDocumentEditor,
+} from './expanded-document-editor/expanded-document-editor-context';
 
 const DOCUMENT_EDITS_MODES = {
   List: 'list',
@@ -169,6 +173,12 @@ const DocumentViewComponent: React.FunctionComponent<
   onColumnWidthChange,
   ...props
 }) => {
+  // Table view renders its cells through ag-grid, which mounts them outside
+  // of the surrounding React context, so the open handler is threaded
+  // through as a prop (and from there into GridContext) instead of relying
+  // on useOpenExpandedDocumentEditor() inside the table's own components.
+  const openExpandedDocumentEditor = useOpenExpandedDocumentEditor();
+
   if (props.docs?.length === 0) {
     return null;
   }
@@ -186,7 +196,7 @@ const DocumentViewComponent: React.FunctionComponent<
     return (
       <>
         {/*
-          Table view handles scroll shadow at the AGGrid level so we're 
+          Table view handles scroll shadow at the AGGrid level so we're
           just planting an element that will always be in view to avoid
           having shadow on the container element.
         */}
@@ -199,6 +209,9 @@ const DocumentViewComponent: React.FunctionComponent<
           className={tableStyles}
           columnWidths={columnWidths}
           onColumnWidthChange={onColumnWidthChange}
+          // Always non-null here: this component is only ever rendered
+          // inside DocumentList's own ExpandedDocumentEditorProvider.
+          onOpenExpandedEditor={openExpandedDocumentEditor!}
         />
       </>
     );
@@ -336,6 +349,7 @@ const DocumentList: React.FunctionComponent<DocumentListProps> = (props) => {
     runBulkUpdate,
     docsPerPage,
     updateMaxDocumentsPerPage,
+    replaceDocument,
   } = props;
 
   useDocumentEditsTelemetry(docs, DOCUMENT_EDITS_MODES[view]);
@@ -573,105 +587,112 @@ const DocumentList: React.FunctionComponent<DocumentListProps> = (props) => {
   const { tellMoreAboutInsight } = useAssistantActions();
 
   return (
-    <div className={documentsContainerStyles} data-testid="compass-crud">
-      <WorkspaceContainer
-        scrollableContainerRef={scrollRef}
-        initialTopInView={currentViewInitialScrollTop === 0}
-        toolbar={
-          <CrudToolbar
-            activeDocumentView={view}
-            error={error}
-            count={count}
-            isFetching={isFetching}
-            isMockDataGeneratorEligibleAndSchemaReady={
-              isMockDataGeneratorEligibleAndSchemaReady
-            }
-            lastCountRunMaxTimeMS={lastCountRunMaxTimeMS}
-            loadingCount={loadingCount}
-            start={start}
-            end={end}
-            page={page}
-            getPage={getPage}
-            insertDataHandler={onOpenInsert}
-            onApplyClicked={onApplyClicked}
-            onResetClicked={onResetClicked}
-            onUpdateButtonClicked={onUpdateButtonClicked}
-            onDeleteButtonClicked={onDeleteButtonClicked}
-            onExpandAllClicked={onExpandAllClicked}
-            onCollapseAllClicked={onCollapseAllClicked}
-            openExportFileDialog={openExportFileDialog}
-            onOpenExportToLanguage={store.openQueryExportToLanguageDialog.bind(
-              store
-            )}
-            outdated={outdated}
-            readonly={!isEditable}
-            viewSwitchHandler={handleViewChanged}
-            isWritable={isWritable}
-            instanceDescription={instanceDescription}
-            refreshDocuments={refreshDocuments}
-            resultId={resultId}
-            querySkip={query.skip}
-            queryLimit={query.limit}
-            insights={getToolbarSignal({
-              query: JSON.stringify(query.filter ?? {}),
-              isCollectionScan: Boolean(isCollectionScan),
-              isSearchIndexesSupported,
-              canCreateIndexes: !preferencesReadWrite,
-              onCreateIndex: store.openCreateIndexModal.bind(store),
-              onCreateSearchIndex: store.openCreateSearchIndexModal.bind(store),
-              onAssistantButtonClick: tellMoreAboutInsight
-                ? () =>
-                    tellMoreAboutInsight({
-                      id: 'query-executed-without-index',
-                      query: JSON.stringify(query),
-                    })
-                : undefined,
-            })}
-            docsPerPage={docsPerPage}
-            updateMaxDocumentsPerPage={handleMaxDocsPerPageChanged}
-          />
-        }
-      >
-        {renderContent}
-      </WorkspaceContainer>
+    <ExpandedDocumentEditorProvider
+      isEditable={isEditable}
+      mode={DOCUMENT_EDITS_MODES[view]}
+      replaceDocument={replaceDocument}
+    >
+      <div className={documentsContainerStyles} data-testid="compass-crud">
+        <WorkspaceContainer
+          scrollableContainerRef={scrollRef}
+          initialTopInView={currentViewInitialScrollTop === 0}
+          toolbar={
+            <CrudToolbar
+              activeDocumentView={view}
+              error={error}
+              count={count}
+              isFetching={isFetching}
+              isMockDataGeneratorEligibleAndSchemaReady={
+                isMockDataGeneratorEligibleAndSchemaReady
+              }
+              lastCountRunMaxTimeMS={lastCountRunMaxTimeMS}
+              loadingCount={loadingCount}
+              start={start}
+              end={end}
+              page={page}
+              getPage={getPage}
+              insertDataHandler={onOpenInsert}
+              onApplyClicked={onApplyClicked}
+              onResetClicked={onResetClicked}
+              onUpdateButtonClicked={onUpdateButtonClicked}
+              onDeleteButtonClicked={onDeleteButtonClicked}
+              onExpandAllClicked={onExpandAllClicked}
+              onCollapseAllClicked={onCollapseAllClicked}
+              openExportFileDialog={openExportFileDialog}
+              onOpenExportToLanguage={store.openQueryExportToLanguageDialog.bind(
+                store
+              )}
+              outdated={outdated}
+              readonly={!isEditable}
+              viewSwitchHandler={handleViewChanged}
+              isWritable={isWritable}
+              instanceDescription={instanceDescription}
+              refreshDocuments={refreshDocuments}
+              resultId={resultId}
+              querySkip={query.skip}
+              queryLimit={query.limit}
+              insights={getToolbarSignal({
+                query: JSON.stringify(query.filter ?? {}),
+                isCollectionScan: Boolean(isCollectionScan),
+                isSearchIndexesSupported,
+                canCreateIndexes: !preferencesReadWrite,
+                onCreateIndex: store.openCreateIndexModal.bind(store),
+                onCreateSearchIndex:
+                  store.openCreateSearchIndexModal.bind(store),
+                onAssistantButtonClick: tellMoreAboutInsight
+                  ? () =>
+                      tellMoreAboutInsight({
+                        id: 'query-executed-without-index',
+                        query: JSON.stringify(query),
+                      })
+                  : undefined,
+              })}
+              docsPerPage={docsPerPage}
+              updateMaxDocumentsPerPage={handleMaxDocsPerPageChanged}
+            />
+          }
+        >
+          {renderContent}
+        </WorkspaceContainer>
 
-      {isEditable && (
-        <>
-          <InsertDocumentDialog
-            closeInsertDocumentDialog={closeInsertDocumentDialog}
-            insertDocument={insertDocument}
-            insertMany={insertMany}
-            updateInsertDocText={updateInsertDocText}
-            toggleInsertDocumentView={toggleInsertDocumentView}
-            version={version}
-            ns={ns}
-            updateComment={updateComment}
-            {...insert}
-          />
-          <BulkUpdateModal
-            ns={ns}
-            filter={query.filter ?? {}}
-            count={count}
-            enablePreview={isUpdatePreviewSupported}
-            {...bulkUpdate}
-            closeBulkUpdateModal={closeBulkUpdateModal}
-            updateBulkUpdatePreview={updateBulkUpdatePreview}
-            runBulkUpdate={runBulkUpdate}
-            saveUpdateQuery={onSaveUpdateQuery}
-          />
-          <BulkDeleteModal
-            open={store.state.bulkDelete.status === 'open'}
-            namespace={store.state.ns}
-            documentCount={store.state.bulkDelete.affected}
-            filter={query.filter ?? {}}
-            onCancel={onCancelBulkDeleteDialog}
-            onConfirmDeletion={onConfirmBulkDeleteDialog}
-            sampleDocuments={store.state.bulkDelete.previews}
-            onExportToLanguage={onExportToLanguageDeleteQuery}
-          />
-        </>
-      )}
-    </div>
+        {isEditable && (
+          <>
+            <InsertDocumentDialog
+              closeInsertDocumentDialog={closeInsertDocumentDialog}
+              insertDocument={insertDocument}
+              insertMany={insertMany}
+              updateInsertDocText={updateInsertDocText}
+              toggleInsertDocumentView={toggleInsertDocumentView}
+              version={version}
+              ns={ns}
+              updateComment={updateComment}
+              {...insert}
+            />
+            <BulkUpdateModal
+              ns={ns}
+              filter={query.filter ?? {}}
+              count={count}
+              enablePreview={isUpdatePreviewSupported}
+              {...bulkUpdate}
+              closeBulkUpdateModal={closeBulkUpdateModal}
+              updateBulkUpdatePreview={updateBulkUpdatePreview}
+              runBulkUpdate={runBulkUpdate}
+              saveUpdateQuery={onSaveUpdateQuery}
+            />
+            <BulkDeleteModal
+              open={store.state.bulkDelete.status === 'open'}
+              namespace={store.state.ns}
+              documentCount={store.state.bulkDelete.affected}
+              filter={query.filter ?? {}}
+              onCancel={onCancelBulkDeleteDialog}
+              onConfirmDeletion={onConfirmBulkDeleteDialog}
+              sampleDocuments={store.state.bulkDelete.previews}
+              onExportToLanguage={onExportToLanguageDeleteQuery}
+            />
+          </>
+        )}
+      </div>
+    </ExpandedDocumentEditorProvider>
   );
 };
 

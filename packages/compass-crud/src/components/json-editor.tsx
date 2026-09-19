@@ -31,6 +31,7 @@ import type { CrudActions } from '../stores/crud-store';
 import { useDocumentAutocompleter } from '../hooks/use-document-autocompleter';
 import { getSafeIntegerViolationMessage } from '../utils';
 import { useTelemetry } from '@mongodb-js/compass-telemetry/provider';
+import { useOpenExpandedDocumentEditor } from './expanded-document-editor/expanded-document-editor-context';
 
 const editorStyles = css({
   minHeight: spacing[800] + spacing[400],
@@ -221,6 +222,11 @@ const JSONEditor: React.FunctionComponent<JSONEditorProps> = ({
 
   const isEditable = editable && !deleting && !isTimeSeries;
 
+  const openExpandedDocumentEditor = useOpenExpandedDocumentEditor();
+  const onExpandDocument = useCallback(() => {
+    openExpandedDocumentEditor?.(doc);
+  }, [doc, openExpandedDocumentEditor]);
+
   const actions = useMemo<Action[]>(() => {
     if (editing) {
       return [];
@@ -254,8 +260,25 @@ const JSONEditor: React.FunctionComponent<JSONEditorProps> = ({
           onMarkForDeletion();
         },
       },
+      isEditable &&
+        openExpandedDocumentEditor && {
+          icon: 'FullScreenEnter',
+          label: 'Expand',
+          action() {
+            onExpandDocument();
+          },
+        },
     ].filter(Boolean) as Action[];
-  }, [editing, onEdit, onMarkForDeletion, handleClone, handleCopy, isEditable]);
+  }, [
+    editing,
+    onEdit,
+    onMarkForDeletion,
+    handleClone,
+    handleCopy,
+    isEditable,
+    onExpandDocument,
+    openExpandedDocumentEditor,
+  ]);
 
   useEffect(() => {
     doc.on(HadronDocument.Events.Cancel, onCancel);

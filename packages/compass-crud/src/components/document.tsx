@@ -5,6 +5,7 @@ import EditableDocument from './editable-document';
 import type { ReadonlyDocumentProps } from './readonly-document';
 import ReadonlyDocument from './readonly-document';
 import type { BSONObject } from '../stores/crud-store';
+import { useOpenExpandedDocumentEditor } from './expanded-document-editor/expanded-document-editor-context';
 
 export type DocumentProps = {
   doc: HadronDocument | BSONObject;
@@ -35,6 +36,8 @@ const Document = (props: DocumentProps) => {
     return new HadronDocument(_doc as Record<string, unknown>);
   }, [_doc]);
 
+  const openExpandedDocumentEditor = useOpenExpandedDocumentEditor();
+
   if (editable && isTimeSeries) {
     return (
       <ReadonlyDocument
@@ -56,6 +59,7 @@ const Document = (props: DocumentProps) => {
         doc={doc}
         onUpdateQuery={onUpdateQuery}
         query={query}
+        onOpenExpandedEditor={openExpandedDocumentEditor ?? undefined}
       />
     );
   }

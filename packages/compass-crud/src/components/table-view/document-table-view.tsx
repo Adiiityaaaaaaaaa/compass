@@ -64,6 +64,7 @@ export type DocumentTableViewProps = {
   removeDocument: CrudActions['removeDocument'];
   replaceDocument: CrudActions['replaceDocument'];
   updateDocument: CrudActions['updateDocument'];
+  onOpenExpandedEditor: (doc: Document) => void;
   start: number;
   store: CrudStore;
   table: TableState;
@@ -86,6 +87,7 @@ export type GridContext = {
     state: 'editing' | 'deleting'
   ) => void;
   handleClone: (data: { hadronDocument: Document }) => void;
+  openExpandedEditor: (data: { hadronDocument: Document }) => void;
 };
 
 /**
@@ -108,6 +110,7 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       handleUpdate: this.handleUpdate,
       handleRemove: this.handleRemove,
       handleClone: this.handleClone,
+      openExpandedEditor: this.handleOpenExpandedEditor,
       path: [],
     };
     const sharedGridProperties: AgGridReactProps = {
@@ -190,6 +193,17 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       excludeInternalFields: true,
     });
     void this.props.openInsertDocumentDialog?.(clonedDoc, true);
+  };
+
+  /**
+   * Handle opening the expanded document editor.
+   */
+  handleOpenExpandedEditor = ({
+    hadronDocument,
+  }: {
+    hadronDocument: Document;
+  }) => {
+    this.props.onOpenExpandedEditor(hadronDocument);
   };
 
   /**
@@ -979,8 +993,8 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       },
       editable: false,
       pinned: 'right',
-      // button group width + padding (8 * 2)
-      width: spacing[7] + spacing[400],
+      // button group width (widened for the extra "expand" action) + padding
+      width: spacing[7] + spacing[600] + spacing[400],
     });
 
     /* Return the updated column definitions */

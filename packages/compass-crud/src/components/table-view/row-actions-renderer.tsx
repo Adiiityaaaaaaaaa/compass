@@ -13,7 +13,7 @@ type RowActionsRendererProps = {
   copyToClipboard: (data: any) => void;
 };
 
-type RowAction = 'edit' | 'remove' | 'clone' | 'copy';
+type RowAction = 'edit' | 'remove' | 'clone' | 'copy' | 'expand';
 
 const RowActionsRenderer: React.FunctionComponent<RowActionsRendererProps> = ({
   context,
@@ -30,9 +30,14 @@ const RowActionsRenderer: React.FunctionComponent<RowActionsRendererProps> = ({
       label: 'Edit Document',
       icon: 'Edit',
     };
+    const expand: ItemAction<RowAction> = {
+      action: 'expand',
+      label: 'Expand Document',
+      icon: 'FullScreenEnter',
+    };
 
     if (nested) {
-      return [edit];
+      return [edit, expand];
     }
 
     return [
@@ -40,6 +45,7 @@ const RowActionsRenderer: React.FunctionComponent<RowActionsRendererProps> = ({
       { action: 'copy', label: 'Copy Document', icon: 'Copy' },
       { action: 'clone', label: 'Clone Document', icon: 'Clone' },
       { action: 'remove', label: 'Delete Document', icon: 'Trash' },
+      expand,
     ];
   }, [nested]);
 
@@ -57,6 +63,9 @@ const RowActionsRenderer: React.FunctionComponent<RowActionsRendererProps> = ({
           break;
         case 'copy':
           copyToClipboard(data.hadronDocument);
+          break;
+        case 'expand':
+          context.openExpandedEditor(data);
           break;
         default:
           break;

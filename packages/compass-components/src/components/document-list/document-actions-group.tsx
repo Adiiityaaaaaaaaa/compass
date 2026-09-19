@@ -117,6 +117,7 @@ const DocumentActionsGroup: React.FunctionComponent<
     onCopy?: () => void;
     onClone?: () => void;
     onRemove?: () => void;
+    onExpandDocument?: () => void;
     onlyShowOnHover?: boolean;
     insights?: Signal | Signal[];
   } & (
@@ -130,6 +131,7 @@ const DocumentActionsGroup: React.FunctionComponent<
   onRemove,
   onExpand,
   expanded,
+  onExpandDocument,
   onlyShowOnHover = true,
   insights,
 }) => {
@@ -247,6 +249,18 @@ const DocumentActionsGroup: React.FunctionComponent<
           onClick={onRemove}
           className={actionsGroupItem}
           tooltipText="Remove document"
+        />
+      )}
+      {onExpandDocument && (
+        <ActionButton
+          size="xsmall"
+          tooltipEnabled={isActive}
+          rightGlyph={<Icon role="presentation" glyph="FullScreenEnter"></Icon>}
+          aria-label="Expand document"
+          data-testid="expand-document-editor-button"
+          onClick={onExpandDocument}
+          className={actionsGroupItem}
+          tooltipText="Expand document"
         />
       )}
     </div>

@@ -2,6 +2,7 @@ import type HadronDocument from 'hadron-document';
 import { useContextMenuGroups } from '@mongodb-js/compass-components';
 
 import type { DocumentProps } from './document';
+import { useOpenExpandedDocumentEditor } from './expanded-document-editor/expanded-document-editor-context';
 
 export type UseDocumentItemContextMenuProps = {
   doc: HadronDocument;
@@ -15,6 +16,7 @@ export function useDocumentItemContextMenu({
   openInsertDocumentDialog,
 }: UseDocumentItemContextMenuProps) {
   const { expanded: isExpanded, editing: isEditing } = doc;
+  const openExpandedDocumentEditor = useOpenExpandedDocumentEditor();
 
   return useContextMenuGroups(
     () => [
@@ -50,6 +52,14 @@ export function useDocumentItemContextMenu({
                 },
               ]
             : []),
+          isEditable && openExpandedDocumentEditor
+            ? {
+                label: 'Expand document to edit...',
+                onAction: () => {
+                  openExpandedDocumentEditor(doc);
+                },
+              }
+            : undefined,
           {
             label: 'Copy document as Shell Syntax',
             onAction: () => {
@@ -96,6 +106,7 @@ export function useDocumentItemContextMenu({
       isEditable,
       copyToClipboard,
       openInsertDocumentDialog,
+      openExpandedDocumentEditor,
     ]
   );
 }

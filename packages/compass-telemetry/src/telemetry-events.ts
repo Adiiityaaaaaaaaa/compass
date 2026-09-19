@@ -1021,6 +1021,36 @@ type DocumentDeletedEvent = ConnectionScopedEvent<{
 }>;
 
 /**
+ * This event is fired when user opens the expanded document editor.
+ *
+ * @category Documents
+ */
+type DocumentExpandedEditOpenedEvent = ConnectionScopedEvent<{
+  name: 'Document Expanded Edit Opened';
+  payload: {
+    /**
+     * The view the expanded editor was opened from.
+     */
+    mode: 'list' | 'json' | 'table';
+  };
+}>;
+
+/**
+ * This event is fired when user closes the expanded document editor.
+ *
+ * @category Documents
+ */
+type DocumentExpandedEditClosedEvent = ConnectionScopedEvent<{
+  name: 'Document Expanded Edit Closed';
+  payload: {
+    /**
+     * The view the expanded editor was opened from.
+     */
+    mode: 'list' | 'json' | 'table';
+  };
+}>;
+
+/**
  * This event is fired when user updates a document
  *
  * @category Documents
@@ -4344,6 +4374,8 @@ export type TelemetryEvent =
   | DocumentClonedEvent
   | DocumentCopiedEvent
   | DocumentDeletedEvent
+  | DocumentExpandedEditClosedEvent
+  | DocumentExpandedEditOpenedEvent
   | DocumentFieldAddedEvent
   | DocumentFieldRemovedEvent
   | DocumentInsertCancelledEvent
