@@ -10,12 +10,6 @@ export {
   type DraggedDocumentField,
 } from './field-drag';
 export {
-  DOCUMENT_FIELD_DRAG_TYPE,
-  setDraggedDocumentField,
-  getDraggedDocumentField,
-  type DraggedDocumentField,
-} from './field-drag';
-export {
   BSONDisplayOptionsProvider,
   useBSONDisplayOptions,
   type BSONDisplayOptions,

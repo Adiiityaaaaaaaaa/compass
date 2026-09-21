@@ -116,9 +116,9 @@ function CopyCollectionModal({
     hideModal();
   }, [isRunning, hideModal]);
 
-  if (!isVisible || !copiedCollection) {
-    return null;
-  }
+  const sourceDescription = copiedCollection
+    ? `"${copiedCollection.database}.${copiedCollection.collection}" (from ${copiedCollection.connectionName})`
+    : '';
 
   return (
     <FormModal
@@ -134,9 +134,7 @@ function CopyCollectionModal({
       data-testid="copy-collection-modal"
     >
       <FormFieldContainer>
-        <Body>
-          {`Paste "${copiedCollection.database}.${copiedCollection.collection}" (from ${copiedCollection.connectionName}) into ${destConnectionName}.`}
-        </Body>
+        <Body>{`Paste ${sourceDescription} into ${destConnectionName}.`}</Body>
       </FormFieldContainer>
       <FormFieldContainer>
         <TextInput
@@ -211,7 +209,7 @@ function CopyCollectionModal({
   );
 }
 
-const MappedCopyCollectionModal = connect(
+const ConnectedCopyCollectionModal = connect(
   (
     state: CopyCollectionRootState
   ): Omit<
@@ -232,5 +230,13 @@ const MappedCopyCollectionModal = connect(
     clearError,
   }
 )(CopyCollectionModal);
+
+// registerCompassPlugin infers its public props type from `component`, and a
+// react-redux ConnectedComponent's own generic shape doesn't play nicely with
+// that inference. A plain, prop-less wrapper keeps the plugin's public props
+// trivially `{}`.
+const MappedCopyCollectionModal: React.FunctionComponent = () => (
+  <ConnectedCopyCollectionModal />
+);
 
 export default MappedCopyCollectionModal;
