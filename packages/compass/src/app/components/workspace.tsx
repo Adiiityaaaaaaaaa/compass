@@ -32,6 +32,7 @@ import {
   CreateNamespacePlugin,
   DropNamespacePlugin,
   RenameCollectionPlugin,
+  CopyCollectionPlugin,
 } from '@mongodb-js/compass-databases-collections';
 import { ImportPlugin, ExportPlugin } from '@mongodb-js/compass-import-export';
 import ExplainPlanCollectionTabModal from '@mongodb-js/compass-explain-plan';
@@ -112,6 +113,7 @@ export default function Workspace({
               <CreateNamespacePlugin></CreateNamespacePlugin>
               <DropNamespacePlugin></DropNamespacePlugin>
               <RenameCollectionPlugin></RenameCollectionPlugin>
+              <CopyCollectionPlugin></CopyCollectionPlugin>
               <CompassAssistantDrawerWithConnections appName="Compass" />
             </>
           )}

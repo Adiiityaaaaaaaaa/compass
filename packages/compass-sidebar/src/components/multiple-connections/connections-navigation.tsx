@@ -368,6 +368,13 @@ const ConnectionsNavigation: React.FC<ConnectionsNavigationProps> = ({
         case 'create-database':
           _onNamespaceAction(connectionId, '', action);
           return;
+        case 'paste-collection':
+          _onNamespaceAction(
+            connectionId,
+            item.type === 'database' ? item.dbName : '',
+            action
+          );
+          return;
         case 'open-shell': {
           let initialEvaluate: string | undefined = undefined;
           let initialInput: string | undefined = undefined;
@@ -708,6 +715,16 @@ const onNamespaceAction = (
         return;
       case 'rename-collection':
         emit('open-rename-collection', ns, { connectionId });
+        return;
+      case 'copy-collection':
+        emit('copy-collection', ns, { connectionId });
+        return;
+      case 'paste-collection':
+        emit(
+          'open-paste-collection',
+          { database: ns.database || undefined },
+          { connectionId }
+        );
         return;
       case 'drop-collection':
         emit('open-drop-collection', ns, { connectionId });

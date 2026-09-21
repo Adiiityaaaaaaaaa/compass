@@ -14,6 +14,17 @@ export const DeletedDocumentSchema = z.object({
   // EJSON.stringify serializes an omitted/undefined value as a literal
   // `null` on disk, so this needs to accept null too, not just "absent".
   _batchId: z.string().nullish(),
+  // Distinguishes a pre-delete snapshot (restored via re-insert) from a
+  // pre-edit snapshot taken before an update/replace (restored via
+  // replace-back, since the document still exists in the collection).
+  // Snapshots saved before this field existed have no `_changeType` at all
+  // (or, per the EJSON.stringify `undefined` -> `null` caveat above, a
+  // literal `null`), and were all delete snapshots, so both cases fall back
+  // to 'delete' here for backward compatibility with already-saved files.
+  _changeType: z
+    .union([z.literal('delete'), z.literal('update')])
+    .nullish()
+    .transform((value) => value ?? 'delete'),
   document: z.any(),
 });
 

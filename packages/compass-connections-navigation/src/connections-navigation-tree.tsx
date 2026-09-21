@@ -248,6 +248,7 @@ const ConnectionsNavigationTree: React.FunctionComponent<
                   isPerformanceTabAvailable: item.isPerformanceTabAvailable,
                   isPerformanceTabSupported: item.isPerformanceTabSupported,
                   isAtlas: !!item.connectionInfo.atlasMetadata,
+                  showPasteAction: true,
                 })
               : notConnectedConnectionItemActions({
                   connectionInfo: item.connectionInfo,

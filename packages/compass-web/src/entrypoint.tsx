@@ -16,6 +16,7 @@ import {
   DatabasesWorkspaceTab,
   DropNamespacePlugin,
   RenameCollectionPlugin,
+  CopyCollectionPlugin,
 } from '@mongodb-js/compass-databases-collections';
 import {
   CompassComponentsProvider,
@@ -392,6 +393,7 @@ function CompassWorkspace({
                   <CreateNamespacePlugin></CreateNamespacePlugin>
                   <DropNamespacePlugin></DropNamespacePlugin>
                   <RenameCollectionPlugin></RenameCollectionPlugin>
+                  <CopyCollectionPlugin></CopyCollectionPlugin>
                   <CompassAssistantDrawerWithConnections appName="Data Explorer" />
                 </>
               );

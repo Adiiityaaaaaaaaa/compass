@@ -97,18 +97,19 @@ const collapsedStripDark = css({
  * running applies them from there. So the query the builder describes is the
  * same query, in the same boxes, as one typed by hand.
  */
-export const DocumentsWithQueryBuilder: React.FunctionComponent<DocumentListProps> = (
-  props
-) => {
+export const DocumentsWithQueryBuilder: React.FunctionComponent<
+  DocumentListProps
+> = (props) => {
   const darkMode = useDarkMode();
   const { store } = props;
   // Per workspace tab, and surviving the unmount that switching tabs causes.
   // Two tabs on the same collection are two different queries, so this is
   // scoped to the tab rather than to the collection.
-  const [builderState, setBuilderState] = useTabState<BuilderState>(
-    'query-builder-rows',
-    EMPTY_BUILDER_STATE
-  );
+  // Defaults to EMPTY_BUILDER_STATE if useTabState ever hands back `undefined`
+  // (e.g. a tab-state key that was previously set to `undefined` sticks,
+  // since useTabState only backfills a missing key, not an undefined one).
+  const [builderState = EMPTY_BUILDER_STATE, setBuilderState] =
+    useTabState<BuilderState>('query-builder-rows', EMPTY_BUILDER_STATE);
   const [builderWidth, setBuilderWidth] = useTabState(
     'query-builder-width',
     DEFAULT_BUILDER_WIDTH

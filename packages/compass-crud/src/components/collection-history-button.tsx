@@ -3,6 +3,8 @@ import { EJSON } from 'bson';
 import {
   Icon,
   Button,
+  Badge,
+  BadgeVariant,
   Checkbox,
   Modal,
   ModalHeader,
@@ -94,6 +96,12 @@ const entryHeaderStyles = css({
   gap: spacing[200],
 });
 
+const entryHeaderLeftStyles = css({
+  display: 'flex',
+  alignItems: 'center',
+  gap: spacing[150],
+});
+
 const previewStyles = css({
   margin: 0,
   maxHeight: '280px',
@@ -122,6 +130,16 @@ function formatPreview(entry: DeletedDocument): string {
   } catch {
     return String((entry.document as { _id?: unknown })?._id ?? entry._id);
   }
+}
+
+// Restoring a 'delete' entry re-inserts the document; restoring an 'update'
+// entry replaces the document's current (edited) value back to this
+// snapshot. Shown per-entry so it's clear which will happen on Restore.
+function changeTypeBadge(entry: DeletedDocument) {
+  if (entry._changeType === 'update') {
+    return { label: 'Edited', variant: BadgeVariant.Blue };
+  }
+  return { label: 'Deleted', variant: BadgeVariant.Red };
 }
 
 export type CollectionHistoryButtonProps = {
@@ -308,8 +326,16 @@ const CollectionHistoryButton: React.FunctionComponent<
                 />
                 <div className={entryContentStyles}>
                   <div className={entryHeaderStyles}>
-                    <div className={timeStyles}>
-                      {new Date(entry._deletedAt).toLocaleString()}
+                    <div className={entryHeaderLeftStyles}>
+                      <Badge
+                        data-testid="collection-history-entry-change-type"
+                        variant={changeTypeBadge(entry).variant}
+                      >
+                        {changeTypeBadge(entry).label}
+                      </Badge>
+                      <div className={timeStyles}>
+                        {new Date(entry._deletedAt).toLocaleString()}
+                      </div>
                     </div>
                     <Button
                       size="xsmall"

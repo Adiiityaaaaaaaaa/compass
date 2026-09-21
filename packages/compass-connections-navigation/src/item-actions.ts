@@ -112,6 +112,16 @@ export const connectedConnectionItemActions = ({
           label: 'Open MongoDB shell',
         }
       : null,
+    // Placed after the first three (inline-eligible) actions so it doesn't
+    // shift what's shown inline vs behind "Show actions" — see
+    // getCollapseAfterForConnectedItem, which only inspects positions 1/2.
+    hasWriteActionsDisabled
+      ? null
+      : {
+          action: 'paste-collection',
+          icon: 'Import',
+          label: 'Paste',
+        },
     isPerformanceTabAvailable
       ? {
           action: 'connection-performance-metrics',
@@ -236,6 +246,14 @@ export const collectionItemActions = ({
     },
   ];
 
+  if (type !== 'view') {
+    actions.push({
+      action: 'copy-collection',
+      label: 'Copy',
+      icon: 'Copy',
+    });
+  }
+
   if (hasWriteActionsDisabled) {
     return stripNullActions(actions);
   }
@@ -294,6 +312,10 @@ export const connectionContextMenuActions = ({
   isShellEnabled,
   hasWriteActionsDisabled,
   connectionInfo,
+  // Only the connection item's own context menu should offer Paste — this
+  // function is also nested into the database/collection context menus for
+  // their shared "connection actions" section, where Paste doesn't apply.
+  showPasteAction = false,
 }: {
   isPerformanceTabAvailable: boolean;
   isPerformanceTabSupported: boolean;
@@ -301,6 +323,7 @@ export const connectionContextMenuActions = ({
   isShellEnabled: boolean;
   hasWriteActionsDisabled: boolean;
   connectionInfo?: ConnectionInfo;
+  showPasteAction?: boolean;
 }): NavigationItemActions => {
   return stripNullActions([
     ...(hasWriteActionsDisabled || !connectionInfo
@@ -309,6 +332,13 @@ export const connectionContextMenuActions = ({
           ...commonConnectionItemActions({ connectionInfo }),
           { separator: true } as NavigationItemAction,
         ]),
+    showPasteAction && !hasWriteActionsDisabled
+      ? {
+          action: 'paste-collection',
+          icon: 'Import',
+          label: 'Paste',
+        }
+      : null,
     isShellEnabled
       ? {
           action: 'open-shell',
@@ -371,6 +401,13 @@ export const databaseContextMenuActions = ({
           icon: 'Plus',
           label: 'Create collection',
         },
+    hasWriteActionsDisabled
+      ? null
+      : {
+          action: 'paste-collection',
+          icon: 'Import',
+          label: 'Paste',
+        },
     { separator: true },
     hasWriteActionsDisabled
       ? null
@@ -425,6 +462,15 @@ export const collectionContextMenuActions = ({
       label: 'Open in new tab',
       icon: 'OpenNewTab',
     },
+    ...(type !== 'view'
+      ? ([
+          {
+            action: 'copy-collection',
+            label: 'Copy',
+            icon: 'Copy',
+          },
+        ] satisfies NavigationItemActions)
+      : []),
   ];
 
   let writeActions: NavigationItemActions = [];

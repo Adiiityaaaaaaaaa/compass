@@ -16,6 +16,8 @@ import { activatePlugin as activateCreateNamespacePlugin } from './stores/create
 import { DatabasesPlugin, DatabasesWorkspaceName } from './databases-plugin';
 import MappedRenameCollectionModal from './components/rename-collection-modal/rename-collection-modal';
 import { activateRenameCollectionPlugin } from './stores/rename-collection';
+import MappedCopyCollectionModal from './components/copy-collection-modal/copy-collection-modal';
+import { activateCopyCollectionPlugin } from './stores/copy-collection';
 import type { WorkspacePlugin } from '@mongodb-js/workspace-info';
 import { workspacesServiceLocator } from '@mongodb-js/compass-workspaces/provider';
 import {
@@ -85,5 +87,18 @@ export const RenameCollectionPlugin = registerCompassPlugin(
     instancesManager: mongoDBInstancesManagerLocator,
     queryStorage: favoriteQueryStorageAccessLocator,
     pipelineStorage: pipelineStorageLocator,
+  }
+);
+
+export const CopyCollectionPlugin = registerCompassPlugin(
+  {
+    name: 'CopyCollectionPlugin',
+    component: MappedCopyCollectionModal,
+    activate: activateCopyCollectionPlugin,
+  },
+  {
+    logger: createLoggerLocator('COMPASS-COPY-COLLECTION-UI'),
+    track: telemetryLocator,
+    connections: connectionsLocator,
   }
 );

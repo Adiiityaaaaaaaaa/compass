@@ -2990,6 +2990,28 @@ type CollectionRenamedEvent = ConnectionScopedEvent<{
 }>;
 
 /**
+ * This event is fired when a "Copy Collection to..." operation completes
+ * successfully, either into a different database on the same connection
+ * (via $merge/$out) or across connections (via streaming inserts).
+ *
+ * @category Database / Collection List
+ */
+type CollectionCopiedEvent = ConnectionScopedEvent<{
+  name: 'Collection Copied';
+  payload: {
+    /**
+     * Whether the destination was on the same connection as the source.
+     */
+    same_connection: boolean;
+
+    /**
+     * The conflict-resolution mode used for the copy.
+     */
+    mode: 'merge' | 'overwrite' | 'replace';
+  };
+}>;
+
+/**
  * This event is fired when a database is successfully dropped.
  *
  * @category Database / Collection List
@@ -3270,6 +3292,7 @@ type ScreenEvent = ConnectionScopedEvent<{
       | 'insert_document_modal'
       | 'non_genuine_mongodb_modal'
       | 'rename_collection_modal'
+      | 'copy_collection_modal'
       | 'restore_pipeline_modal'
       | 'save_pipeline_modal'
       | 'shell_info_modal'
@@ -4330,6 +4353,7 @@ export type TelemetryEvent =
   | BulkUpdateExecutedEvent
   | BulkUpdateFavoritedEvent
   | BulkUpdateOpenedEvent
+  | CollectionCopiedEvent
   | CollectionCreatedEvent
   | CollectionDroppedEvent
   | CollectionRenamedEvent

@@ -981,6 +981,7 @@ describe('ConnectionsNavigationTree', function () {
           'Duplicate connection',
           'Remove connection',
           { separator: true },
+          'Paste',
           'Open MongoDB shell',
           'View performance metrics',
           'Show connection info',

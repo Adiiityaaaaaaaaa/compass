@@ -665,6 +665,7 @@ class CrudStoreImpl
           _ns: this.state.ns,
           _connectionId: this.connectionInfoRef.current.id,
           _operation: operation,
+          _changeType: 'delete',
           _batchId,
           document,
         }))
@@ -674,6 +675,37 @@ class CrudStoreImpl
         mongoLogId(1_001_000_450),
         'Documents',
         'Failed to snapshot deleted document(s) for recovery',
+        { message: (error as Error).message }
+      );
+    }
+  }
+
+  /**
+   * Best-effort local snapshot of a document's pre-edit state before an
+   * update/replace is sent to the server, so the edit can be reverted later
+   * via the "Collection History" panel. Never throws: a failure here should
+   * never block the actual update/replace.
+   */
+  private async snapshotUpdatedDocument(
+    originalDocument: BSONObject
+  ): Promise<void> {
+    if (!this.deletedDocumentsStorage) {
+      return;
+    }
+    try {
+      await this.deletedDocumentsStorage.saveDeleted({
+        _ns: this.state.ns,
+        _connectionId: this.connectionInfoRef.current.id,
+        _operation: 'single',
+        _changeType: 'update',
+        _batchId: undefined,
+        document: originalDocument,
+      });
+    } catch (error) {
+      this.logger.log.warn(
+        mongoLogId(1_001_000_453),
+        'Documents',
+        'Failed to snapshot document pre-edit state for recovery',
         { message: (error as Error).message }
       );
     }
@@ -691,8 +723,11 @@ class CrudStoreImpl
   }
 
   /**
-   * Restore a previously deleted document, re-inserting it with its
-   * original _id.
+   * Restore a previously snapshotted document. A 'delete' snapshot is
+   * restored by re-inserting it with its original _id; an 'update' snapshot
+   * is restored by replacing the document's current value back to the
+   * pre-edit snapshot, since the document was never removed from the
+   * collection in that case.
    */
   async restoreDeletedDocument(
     entryId: string
@@ -711,7 +746,19 @@ class CrudStoreImpl
       };
     }
     try {
-      await this.dataService.insertOne(this.state.ns, entry.document);
+      if (entry._changeType === 'update') {
+        // The document still exists in the collection (it was edited, not
+        // removed), so put its old value back in place rather than
+        // re-inserting it, which would fail with a duplicate key error
+        // since a document with this _id already exists.
+        await this.dataService.replaceOne(
+          this.state.ns,
+          { _id: (entry.document as BSONObject)._id as any },
+          entry.document
+        );
+      } else {
+        await this.dataService.insertOne(this.state.ns, entry.document);
+      }
       await this.deletedDocumentsStorage.delete(entryId);
       void this.refreshDocuments();
       return { success: true };
@@ -793,6 +840,12 @@ class CrudStoreImpl
         // _verifyUpdateAllowed emitted update-error
         return;
       }
+
+      // Snapshot the document's pre-edit state (as it currently exists in
+      // the database, not the in-progress edit) before sending the update,
+      // so it can be restored later via "Collection History".
+      await this.snapshotUpdatedDocument(doc.generateOriginalObject());
+
       const [error, d] = await findAndModifyWithFLEFallback(
         this.dataService,
         this.state.ns,
@@ -898,6 +951,11 @@ class CrudStoreImpl
         queryKeyInclusionOptions
       );
       this.logger.debug('Performing findOneAndReplace', { query, object });
+
+      // Snapshot the document's pre-edit state (as it currently exists in
+      // the database, not the in-progress edit) before sending the replace,
+      // so it can be restored later via "Collection History".
+      await this.snapshotUpdatedDocument(doc.generateOriginalObject());
 
       const [error, d] = await findAndModifyWithFLEFallback(
         this.dataService,
