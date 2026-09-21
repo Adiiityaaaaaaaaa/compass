@@ -433,6 +433,7 @@ const connectedContainerStyles = css({
 
 const CompassComponentsProviderWeb: React.FunctionComponent<{
   darkMode?: boolean;
+  children?: React.ReactNode;
 }> = ({ darkMode, children }) => {
   const track = useTelemetry();
   const { enableGuideCues, legacyUUIDDisplayEncoding, timezone } =
