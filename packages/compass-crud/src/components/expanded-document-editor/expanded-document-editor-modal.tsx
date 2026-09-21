@@ -103,9 +103,12 @@ export const ExpandedDocumentEditorModal: React.FunctionComponent<
     }
   }, [doc, value, replaceDocument, handleClose]);
 
+  // Shared by the footer's Cancel button and the modal's own close (the ×
+  // button, backdrop click, Escape key), so dismissing the editor any of
+  // those ways always leaves the underlying document in the same clean,
+  // non-editing state rather than stuck showing an in-progress edit.
   const onCancel = useCallback(() => {
-    // The footer's own Cancel button already calls doc.cancel() before this
-    // fires, reverting any in-progress changes.
+    doc?.cancel();
     doc?.finishEditing();
     handleClose();
   }, [doc, handleClose]);
@@ -118,7 +121,7 @@ export const ExpandedDocumentEditorModal: React.FunctionComponent<
   return (
     <Modal
       open={!!doc}
-      setOpen={handleClose}
+      setOpen={onCancel}
       fullScreen
       data-testid="expanded-document-editor-modal"
     >
