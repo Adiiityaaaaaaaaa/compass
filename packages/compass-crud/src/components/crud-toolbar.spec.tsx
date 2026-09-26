@@ -44,6 +44,9 @@ describe('CrudToolbar Component', function () {
         lastCountRunMaxTimeMS={12345}
         insertDataHandler={noop}
         loadingCount={false}
+        isCountRequested={true}
+        onCountClicked={noop}
+        onCancelCountClicked={noop}
         isFetching={false}
         docsPerPage={25}
         isWritable
@@ -213,11 +216,14 @@ describe('CrudToolbar Component', function () {
     expect(getPageSpy.calledOnce).to.be.false;
   });
 
-  it('should have the next page button enabled when count is unknown', function () {
+  it('should have the next page button enabled when count is unknown and the page is full', function () {
     const getPageSpy = sinon.spy();
     renderCrudToolbar({
       getPage: getPageSpy,
       page: 2,
+      start: 51,
+      end: 75,
+      docsPerPage: 25,
       count: undefined,
     });
 
@@ -229,6 +235,62 @@ describe('CrudToolbar Component', function () {
 
     expect(getPageSpy.calledOnce).to.be.true;
     expect(getPageSpy.firstCall.args[0]).to.equal(3);
+  });
+
+  it('should have the next page button disabled when count is unknown and the page is short', function () {
+    renderCrudToolbar({
+      page: 2,
+      start: 51,
+      end: 60,
+      docsPerPage: 25,
+      count: undefined,
+    });
+
+    expect(screen.getByTestId('docs-toolbar-next-page-btn')).to.have.attribute(
+      'aria-disabled',
+      'true'
+    );
+  });
+
+  describe('count button', function () {
+    it('shows a Count button instead of the total until a count is requested', function () {
+      const onCountClicked = sinon.spy();
+      renderCrudToolbar({
+        start: 1,
+        end: 25,
+        count: undefined,
+        isCountRequested: false,
+        onCountClicked,
+      });
+
+      expect(screen.getByTestId('crud-document-count-display')).to.have.text(
+        '1 – 25 '
+      );
+
+      userEvent.click(screen.getByTestId('crud-count-button'));
+      expect(onCountClicked).to.have.been.calledOnce;
+    });
+
+    it('does not show the Count button while documents are loading', function () {
+      renderCrudToolbar({ isCountRequested: false, isFetching: true });
+
+      expect(screen.queryByTestId('crud-count-button')).to.not.exist;
+    });
+
+    it('lets the user cancel a count that is still running', function () {
+      const onCancelCountClicked = sinon.spy();
+      renderCrudToolbar({
+        count: undefined,
+        isCountRequested: true,
+        loadingCount: true,
+        onCancelCountClicked,
+      });
+
+      expect(screen.queryByTestId('crud-count-button')).to.not.exist;
+
+      userEvent.click(screen.getByTestId('crud-cancel-count-button'));
+      expect(onCancelCountClicked).to.have.been.calledOnce;
+    });
   });
 
   it('should render the add data button when it is not readonly', function () {

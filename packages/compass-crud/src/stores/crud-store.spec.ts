@@ -25,6 +25,7 @@ import {
   fetchDocuments,
   activateDocumentsPlugin as _activate,
   MAX_DOCS_PER_PAGE_STORAGE_KEY,
+  ON_DEMAND_COUNT_MAX_TIME_MS,
   DOCUMENT_VIEW_STORAGE_KEY,
   parseInsertDocument,
   parseInsertDocumentArray,
@@ -317,14 +318,16 @@ describe('store', function () {
 
       expect(store.state).to.deep.equal({
         abortController: null,
+        countAbortController: null,
         bulkDelete: {
           affected: 0,
           previews: [],
           status: 'closed',
         },
         debouncingLoad: false,
-        lastCountRunMaxTimeMS: 5000,
+        lastCountRunMaxTimeMS: ON_DEMAND_COUNT_MAX_TIME_MS,
         loadingCount: false,
+        isCountRequested: false,
         collection: 'test',
         count: null,
         docs: [],
@@ -1280,7 +1283,6 @@ describe('store', function () {
         it('inserts the document', async function () {
           const listener = waitForState(store, (state) => {
             expect(state.docs.length).to.equal(1);
-            expect(state.count).to.equal(1);
             expect(state.end).to.equal(1);
             expect(state.insert.doc).to.equal(null);
             expect(state.insert.editorText).to.equal(null);
@@ -1311,7 +1313,6 @@ describe('store', function () {
         it('inserts the document but does not add to the list', async function () {
           const listener = waitForState(store, (state) => {
             expect(state.docs.length).to.equal(0);
-            expect(state.count).to.equal(0);
             expect(state.insert.doc).to.equal(null);
             expect(state.insert.editorText).to.equal(null);
             expect(state.insert.isOpen).to.equal(false);
@@ -1501,14 +1502,12 @@ describe('store', function () {
               // after it refreshed the documents it will update the store again
               expect(state.error).to.equal(null);
               expect(state.docs.length).to.equal(2);
-              expect(state.count).to.equal(2);
               expect(state.end).to.equal(2);
 
               // this is fetchedInitial because there's no filter/projection/collation
               expect(state.status).to.equal('fetchedInitial');
               expect(state.error).to.be.null;
               expect(state.docs).to.have.lengthOf(2);
-              expect(state.count).to.equal(2);
               expect(state.page).to.equal(0);
               expect(state.start).to.equal(1);
               expect(state.end).to.equal(2);
@@ -1545,7 +1544,6 @@ describe('store', function () {
         it('inserts both documents but does not add to the list', async function () {
           const listener = waitForState(store, (state) => {
             expect(state.docs.length).to.equal(0);
-            expect(state.count).to.equal(0);
             expect(state.end).to.equal(0);
             expect(state.insert.doc).to.equal(null);
             expect(state.insert.editorText).to.equal(null);
@@ -1573,7 +1571,6 @@ describe('store', function () {
           const listener = waitForState(store, (state) => {
             expect(state.error).to.be.null;
             expect(state.docs).to.have.lengthOf(1);
-            expect(state.count).to.equal(1);
             expect(state.page).to.equal(0);
             expect(state.start).to.equal(1);
             expect(state.end).to.equal(1);
@@ -1943,7 +1940,8 @@ describe('store', function () {
               expect(state.docs).to.have.length(2);
               expect(state.docs[0].doc.name).to.equal('testing1');
               expect(state.debouncingLoad).to.equal(false);
-              expect(state.count).to.equal(2);
+              expect(state.count).to.equal(null);
+              expect(state.isCountRequested).to.equal(false);
               expect(state.start).to.equal(1);
               expect(state.shardKeys).to.deep.equal({});
             },
@@ -1969,7 +1967,8 @@ describe('store', function () {
               expect(state.docs).to.have.length(2);
               expect(state.docs[0].doc.name).to.equal('testing2');
               expect(state.debouncingLoad).to.equal(false);
-              expect(state.count).to.equal(2);
+              expect(state.count).to.equal(null);
+              expect(state.isCountRequested).to.equal(false);
               expect(state.start).to.equal(1);
               expect(state.shardKeys).to.deep.equal({});
             },
@@ -1993,7 +1992,7 @@ describe('store', function () {
 
           const listener = waitForState(store, (state) => {
             expect(state.docs).to.have.length(2);
-            expect(state.count).to.equal(2);
+            expect(state.count).to.equal(null);
           });
 
           void store.refreshDocuments();
@@ -2085,17 +2084,13 @@ describe('store', function () {
         });
       });
 
-      it('does not specify the _id_ index as hint', async function () {
+      it('does not specify the _id_ index as hint when counting', async function () {
+        await store.refreshDocuments();
+
         const spy = sinon.spy(dataService, 'aggregate');
-        const listener = waitForState(store, (state) => {
-          expect(state.count).to.equal(0);
-        });
+        await store.runCount();
 
-        void store.refreshDocuments();
-
-        await listener;
-
-        // the count should be the only aggregate we ran
+        expect(store.state.count).to.equal(0);
         expect(spy.callCount).to.equal(1);
         const opts = spy.args[0][2];
         expect(opts?.hint).to.not.exist;
@@ -2119,7 +2114,6 @@ describe('store', function () {
             // cancel the operation as soon as the query starts
             expect(state.status).to.equal('fetching');
             expect(state.count).to.be.null;
-            expect(state.loadingCount).to.be.true; // initially count is still loading
             expect(state.error).to.be.null;
             expect(state.abortController).to.not.be.null;
 
@@ -2136,7 +2130,6 @@ describe('store', function () {
             expect(state.status).to.equal('error');
             expect(state.error.message).to.equal('This operation was aborted');
             expect(state.abortController).to.be.null;
-            expect(state.loadingCount).to.be.false; // eventually count loads
           },
         ]);
 
@@ -2144,11 +2137,78 @@ describe('store', function () {
 
         await listener;
 
-        // the count should be the only aggregate we ran
-        expect(spy.callCount).to.equal(1);
-        const opts = spy.args[0][2];
-        expect(opts?.hint).to.equal('_id_');
+        // The count only runs on demand, so a refresh runs no aggregation.
+        expect(spy.callCount).to.equal(0);
       });
+    });
+  });
+
+  describe('#runCount', function () {
+    let store: CrudStore;
+
+    beforeEach(async function () {
+      const plugin = activatePlugin();
+      store = plugin.store;
+      deactivate = () => plugin.deactivate();
+      await dataService.insertOne('compass-crud.test', { name: 'testing1' });
+      await dataService.insertOne('compass-crud.test', { name: 'testing2' });
+      await store.refreshDocuments();
+    });
+
+    afterEach(function () {
+      return dataService.deleteMany('compass-crud.test', {});
+    });
+
+    it('counts the documents matching the applied query', async function () {
+      await store.runCount();
+
+      expect(store.state.count).to.equal(2);
+      expect(store.state.loadingCount).to.equal(false);
+      expect(store.state.isCountRequested).to.equal(true);
+    });
+
+    it('counts with the _id_ hint and the long on-demand time limit', async function () {
+      const spy = sinon.spy(dataService, 'aggregate');
+
+      await store.runCount();
+
+      expect(spy.callCount).to.equal(1);
+      const opts = spy.args[0][2];
+      expect(opts?.hint).to.equal('_id_');
+      expect(opts?.maxTimeMS).to.equal(ON_DEMAND_COUNT_MAX_TIME_MS);
+    });
+
+    it('goes back to no count when the count is cancelled', async function () {
+      const counting = store.runCount();
+      expect(store.state.loadingCount).to.equal(true);
+
+      store.cancelCount();
+      await counting;
+
+      expect(store.state.count).to.equal(null);
+      expect(store.state.loadingCount).to.equal(false);
+      expect(store.state.isCountRequested).to.equal(false);
+    });
+
+    it('drops a count that was running when the documents are refreshed', async function () {
+      const counting = store.runCount();
+
+      await store.refreshDocuments();
+      await counting;
+
+      expect(store.state.count).to.equal(null);
+      expect(store.state.loadingCount).to.equal(false);
+      expect(store.state.isCountRequested).to.equal(false);
+    });
+
+    it('clears a finished count when the documents are refreshed', async function () {
+      await store.runCount();
+      expect(store.state.count).to.equal(2);
+
+      await store.refreshDocuments();
+
+      expect(store.state.count).to.equal(null);
+      expect(store.state.isCountRequested).to.equal(false);
     });
   });
 

@@ -263,16 +263,11 @@ const EMPTY_UPDATE_ERROR = new Error(
 const DEFAULT_INITIAL_MAX_TIME_MS = 60000;
 
 /**
- * A cap for the maxTimeMS used for countDocuments. This value is used
- * in place of the query maxTimeMS unless that is smaller.
- *
- * Due to the limit of 20 documents the batch of data for the query is usually
- * ready sooner than the count.
- *
- * We want to make sure `count` does not hold back the query results for too
- * long after docs are returned.
+ * The count only runs when the user asks for it, so unlike the find it isn't
+ * holding anything else back and can be given much longer to finish on large
+ * collections. The maxTimeMS preference limit, when set, still applies.
  */
-export const COUNT_MAX_TIME_MS_CAP = 5000;
+export const ON_DEMAND_COUNT_MAX_TIME_MS = 10 * 60 * 1000;
 
 /**
  * The key we use to persist the user selected maximum documents per page for
@@ -356,6 +351,7 @@ type CrudState = {
   ns: string;
   collection: string;
   abortController: AbortController | null;
+  countAbortController: AbortController | null;
   error: Error | null;
   docs: Document[] | null;
   start: number;
@@ -374,6 +370,9 @@ type CrudState = {
   lastCountRunMaxTimeMS: number;
   debouncingLoad: boolean;
   loadingCount: boolean;
+  // Until the user asks for a count there is no count at all, which the UI
+  // shows differently from a count that ran and was unavailable.
+  isCountRequested: boolean;
   shardKeys: null | BSONObject;
   resultId: number;
   isWritable: boolean;
@@ -465,6 +464,7 @@ class CrudStoreImpl
       ns: this.options.namespace,
       collection: toNS(this.options.namespace).collection,
       abortController: null,
+      countAbortController: null,
       error: null,
       docs: [],
       start: 0,
@@ -483,7 +483,8 @@ class CrudStoreImpl
       status: DOCUMENTS_STATUS_INITIAL,
       debouncingLoad: false,
       loadingCount: false,
-      lastCountRunMaxTimeMS: COUNT_MAX_TIME_MS_CAP,
+      isCountRequested: false,
+      lastCountRunMaxTimeMS: ON_DEMAND_COUNT_MAX_TIME_MS,
       shardKeys: null,
       resultId: resultId(),
       isWritable: this.instance.isWritable,
@@ -1846,26 +1847,6 @@ class CrudStoreImpl
       signal,
     };
 
-    const countOptions: Parameters<typeof countDocuments>[4] = {
-      skip: query.skip,
-      maxTimeMS: capMaxTimeMSAtPreferenceLimit(
-        this.preferences,
-        (query.maxTimeMS ?? 0) > COUNT_MAX_TIME_MS_CAP
-          ? COUNT_MAX_TIME_MS_CAP
-          : query.maxTimeMS
-      ),
-      signal,
-      ...(query.hint
-        ? {
-            hint: query.hint,
-          }
-        : {}),
-    };
-
-    if (!countOptions.hint && this.isCountHintSafe(query)) {
-      countOptions.hint = '_id_';
-    }
-
     const isView = this.options.isReadonly && this.options.sourceName;
     // Default sort options that we allow to choose from in settings will have a
     // massive negative effect on the query performance for views and view-like
@@ -1898,7 +1879,6 @@ class CrudStoreImpl
 
     // only set limit if it's > 0, read-only views cannot handle 0 limit.
     if (query.limit && query.limit > 0) {
-      countOptions.limit = query.limit;
       findOptions.limit = Math.min(docsPerPage, query.limit);
     }
 
@@ -1910,7 +1890,6 @@ class CrudStoreImpl
         ns,
         withFilter: !isEmpty(query.filter),
         findOptions,
-        countOptions,
       }
     );
 
@@ -1936,32 +1915,8 @@ class CrudStoreImpl
       this.setState({ isCollectionScan: false });
     }
 
-    // Don't wait for the count to finish. Set the result asynchronously.
-    countDocuments(
-      this.dataService,
-      this.preferences,
-      ns,
-      query.filter ?? {},
-      countOptions,
-      (err: any) => {
-        this.logger.log.warn(
-          mongoLogId(1_001_000_288),
-          'Documents',
-          'Failed to count documents',
-          err
-        );
-      }
-    )
-      .then((count) => this.setState({ count, loadingCount: false }))
-      .catch((err) => {
-        // countDocuments already swallows all db errors and returns null. The
-        // only known error it can throw is AbortError. If
-        // something new does appear we probably shouldn't swallow it.
-        if (!this.dataService.isCancelError(err)) {
-          throw err;
-        }
-        this.setState({ loadingCount: false });
-      });
+    // A count of the previous results doesn't apply to the new ones.
+    this.cancelCount();
 
     const promises = [
       fetchShardingKeys(
@@ -1993,12 +1948,13 @@ class CrudStoreImpl
 
     // This is so that the UI can update to show that we're fetching
     this.setState({
-      lastCountRunMaxTimeMS: countOptions.maxTimeMS,
       status: DOCUMENTS_STATUS_FETCHING,
       abortController,
       error: null,
-      count: null, // we don't know the new count yet
-      loadingCount: true,
+      count: null,
+      loadingCount: false,
+      isCountRequested: false,
+      countAbortController: null,
     });
 
     // don't start showing the loading indicator and cancel button immediately
@@ -2056,9 +2012,91 @@ class CrudStoreImpl
 
   cancelOperation() {
     // As we use same controller for all operations
-    // (find, count and shardingKeys), aborting will stop all.
+    // (find and shardingKeys), aborting will stop all.
     this.state.abortController?.abort(new Error('This operation was aborted'));
     this.setState({ abortController: null });
+  }
+
+  async runCount() {
+    if (this.state.loadingCount) {
+      return;
+    }
+
+    const query = this.queryBar.getLastAppliedQuery('crud');
+    const abortController = new AbortController();
+
+    const countOptions: Parameters<typeof countDocuments>[4] = {
+      skip: query.skip,
+      maxTimeMS: capMaxTimeMSAtPreferenceLimit(
+        this.preferences,
+        Math.max(query.maxTimeMS ?? 0, ON_DEMAND_COUNT_MAX_TIME_MS)
+      ),
+      signal: abortController.signal,
+      hint: query.hint ?? (this.isCountHintSafe(query) ? '_id_' : undefined),
+    };
+
+    // only set limit if it's > 0, read-only views cannot handle 0 limit.
+    if (query.limit && query.limit > 0) {
+      countOptions.limit = query.limit;
+    }
+
+    this.setState({
+      count: null,
+      loadingCount: true,
+      isCountRequested: true,
+      countAbortController: abortController,
+      lastCountRunMaxTimeMS: countOptions.maxTimeMS,
+    });
+
+    // A refresh can cancel this count and start another before this one
+    // settles, so only the latest count may write its result.
+    const isLatestCount = () =>
+      this.state.countAbortController === abortController;
+
+    try {
+      const count = await countDocuments(
+        this.dataService,
+        this.preferences,
+        this.state.ns,
+        query.filter ?? {},
+        countOptions,
+        (err: any) => {
+          this.logger.log.warn(
+            mongoLogId(1_001_000_288),
+            'Documents',
+            'Failed to count documents',
+            err
+          );
+        }
+      );
+      if (isLatestCount()) {
+        this.setState({
+          count,
+          loadingCount: false,
+          countAbortController: null,
+        });
+      }
+    } catch (err) {
+      // countDocuments already swallows all db errors and returns null. The
+      // only known error it can throw is AbortError. If something new does
+      // appear we probably shouldn't swallow it.
+      if (!this.dataService.isCancelError(err)) {
+        throw err;
+      }
+      if (isLatestCount()) {
+        this.setState({
+          loadingCount: false,
+          isCountRequested: false,
+          countAbortController: null,
+        });
+      }
+    }
+  }
+
+  cancelCount() {
+    // No custom reason: the default abort reason is an AbortError, which is
+    // what countDocuments checks for to tell a cancel apart from a failure.
+    this.state.countAbortController?.abort();
   }
 
   debounceLoading() {
@@ -2435,6 +2473,7 @@ export function activateDocumentsPlugin(
     actions,
     deactivate() {
       store.cancelOperation();
+      store.cancelCount();
       cleanup();
     },
   };

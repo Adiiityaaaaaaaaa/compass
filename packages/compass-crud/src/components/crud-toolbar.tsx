@@ -149,6 +149,9 @@ export type CrudToolbarProps = {
   isMockDataGeneratorEligibleAndSchemaReady?: boolean;
   lastCountRunMaxTimeMS: number;
   loadingCount: boolean;
+  isCountRequested: boolean;
+  onCountClicked: () => void;
+  onCancelCountClicked: () => void;
   onApplyClicked: () => void;
   onResetClicked: () => void;
   onUpdateButtonClicked: () => void;
@@ -188,6 +191,9 @@ const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
   isMockDataGeneratorEligibleAndSchemaReady,
   lastCountRunMaxTimeMS,
   loadingCount,
+  isCountRequested,
+  onCountClicked,
+  onCancelCountClicked,
   onApplyClicked,
   onResetClicked,
   onUpdateButtonClicked,
@@ -221,14 +227,14 @@ const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
   }, [refreshDocuments, track, connectionInfoRef]);
 
   const prevButtonDisabled = useMemo(() => page === 0, [page]);
-  const nextButtonDisabled = useMemo(
-    // If we don't know the count, we can't know if there are more pages.
-    () =>
-      count === undefined || count === null
-        ? false
-        : docsPerPage * (page + 1) >= count,
-    [count, page, docsPerPage]
-  );
+  const nextButtonDisabled = useMemo(() => {
+    if (typeof count === 'number') {
+      return docsPerPage * (page + 1) >= count;
+    }
+    // Without a count, a page that came back short must be the last one.
+    const docsOnPage = start === 0 ? 0 : end - start + 1;
+    return docsOnPage < docsPerPage;
+  }, [count, page, docsPerPage, start, end]);
 
   const enableExplainPlan = usePreference('enableExplainPlan');
   const shouldDisableBulkOp = useMemo(
@@ -422,7 +428,7 @@ const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
           </Select>
           <Body data-testid="crud-document-count-display">
             {start} – {end}{' '}
-            {!loadingCount && (
+            {isCountRequested && !loadingCount && (
               <span>
                 {'of '}
                 {count ?? (
@@ -445,9 +451,28 @@ const CrudToolbar: React.FunctionComponent<CrudToolbarProps> = ({
             )}
           </Body>
           {loadingCount && (
-            <div className={loaderContainerStyles}>
-              <SpinLoader size="12px" title="Fetching document count…" />
-            </div>
+            <>
+              <div className={loaderContainerStyles}>
+                <SpinLoader size="12px" title="Fetching document count…" />
+              </div>
+              <IconButton
+                aria-label="Cancel count"
+                title="Cancel count"
+                data-testid="crud-cancel-count-button"
+                onClick={onCancelCountClicked}
+              >
+                <Icon glyph="X" />
+              </IconButton>
+            </>
+          )}
+          {!isCountRequested && !isFetching && (
+            <Button
+              size="xsmall"
+              data-testid="crud-count-button"
+              onClick={onCountClicked}
+            >
+              Count
+            </Button>
           )}
           {!loadingCount && !isFetching && (
             <IconButton
