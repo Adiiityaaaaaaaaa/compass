@@ -16,6 +16,7 @@ export type ConditionOperator =
   | 'in'
   | 'nin'
   | 'regex'
+  | 'contains'
   | 'exists'
   | 'notExists';
 
@@ -34,6 +35,7 @@ export const CONDITION_OPERATORS: {
   { value: 'in', label: 'in' },
   { value: 'nin', label: 'not in' },
   { value: 'regex', label: 'matches' },
+  { value: 'contains', label: 'contains' },
   { value: 'exists', label: 'exists', valueless: true },
   { value: 'notExists', label: 'does not exist', valueless: true },
 ];
@@ -138,6 +140,38 @@ export function parseValueText(text: string): ParsedValue {
   }
 }
 
+/**
+ * Escapes the regex metacharacters, so that "contains" looks for the text as
+ * written. `3.5` finds a literal dot rather than any character, which is what
+ * the words on the operator promise.
+ */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The text a "contains" row searches for.
+ *
+ * Every other operator reads its box as shell syntax, and a value dragged in
+ * from a document arrives quoted, so a string is unwrapped rather than searched
+ * for along with its quotes. Anything that is not a string is taken as written,
+ * which is what lets a bare word be typed without quoting it.
+ */
+function containsText(valueText: string): string {
+  const parsed = parseValueText(valueText);
+  if (parsed.ok) {
+    if (typeof parsed.value === 'string') {
+      return parsed.value;
+    }
+    // A regex typed into a "contains" box is a misunderstanding, but its text
+    // is still what was meant; the escaping below makes it literal.
+    if (parsed.value instanceof RegExp) {
+      return parsed.value.source;
+    }
+  }
+  return valueText.trim();
+}
+
 function conditionToFilterFragment(
   row: ConditionRow
 ): { field: string; value: unknown } | { error: string } {
@@ -146,6 +180,16 @@ function conditionToFilterFragment(
   }
   if (row.operator === 'notExists') {
     return { field: row.field, value: { $exists: false } };
+  }
+
+  // Handled before the shared parse below: this is the one operator whose box
+  // holds plain text, so `london` must not have to be written as `'london'`.
+  if (row.operator === 'contains') {
+    const text = containsText(row.valueText);
+    if (text === '') {
+      return { error: `${row.field}: Value is empty` };
+    }
+    return { field: row.field, value: new RegExp(escapeRegExp(text), 'i') };
   }
 
   const parsed = parseValueText(row.valueText);

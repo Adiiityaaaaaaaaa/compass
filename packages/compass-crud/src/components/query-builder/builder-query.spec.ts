@@ -188,6 +188,91 @@ describe('builder-query', function () {
       expect(compiled.errors).to.be.empty;
     });
 
+    it('compiles contains to a case insensitive regex', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'name',
+              operator: 'contains',
+              valueText: 'lon',
+            }),
+          ],
+        })
+      );
+      const value = compiled.filter.name as RegExp;
+      expect(value).to.be.instanceOf(RegExp);
+      expect(value.source).to.equal('lon');
+      expect(value.flags).to.equal('i');
+      expect(compiled.errors).to.be.empty;
+    });
+
+    it('matches contains anywhere in the value, ignoring case', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'name',
+              operator: 'contains',
+              valueText: 'lon',
+            }),
+          ],
+        })
+      );
+      const value = compiled.filter.name as RegExp;
+      expect(value.test('London')).to.equal(true);
+      expect(value.test('Colony')).to.equal(true);
+      expect(value.test('Paris')).to.equal(false);
+    });
+
+    it('takes contains text literally rather than as a pattern', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'code',
+              operator: 'contains',
+              valueText: 'a.c',
+            }),
+          ],
+        })
+      );
+      const value = compiled.filter.code as RegExp;
+      expect(value.test('xa.cx')).to.equal(true);
+      // Without escaping the dot this would match, which is the whole
+      // difference between "contains" and "matches".
+      expect(value.test('abc')).to.equal(false);
+    });
+
+    it('unwraps a quoted string dropped into a contains row', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'name',
+              operator: 'contains',
+              valueText: "'London'",
+            }),
+          ],
+        })
+      );
+      const value = compiled.filter.name as RegExp;
+      expect(value.source).to.equal('London');
+      expect(value.test('London')).to.equal(true);
+    });
+
+    it('reports an empty contains value', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({ field: 'name', operator: 'contains', valueText: '  ' }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({});
+      expect(compiled.errors).to.deep.equal(['name: Value is empty']);
+    });
+
     it('skips disabled rows', function () {
       const compiled = compileBuilderState(
         state({

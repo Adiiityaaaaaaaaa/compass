@@ -388,7 +388,11 @@ export const QueryBuilderPanel: React.FunctionComponent<
               <div className={valueCell}>
                 <TextInput
                   aria-label="Value"
-                  placeholder="value"
+                  // "contains" searches for the text as written, so it is the
+                  // one box that does not want shell syntax.
+                  placeholder={
+                    condition.operator === 'contains' ? 'text' : 'value'
+                  }
                   sizeVariant="small"
                   value={condition.valueText}
                   onChange={(event) =>
