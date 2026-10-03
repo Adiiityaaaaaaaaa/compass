@@ -139,6 +139,7 @@ export type DocumentListProps = {
     | 'count'
     | 'lastCountRunMaxTimeMS'
     | 'loadingCount'
+    | 'isCountRequested'
     | 'start'
     | 'end'
     | 'page'
@@ -313,6 +314,7 @@ const DocumentList: React.FunctionComponent<DocumentListProps> = (props) => {
     count,
     lastCountRunMaxTimeMS,
     loadingCount,
+    isCountRequested,
     start,
     end,
     page,
@@ -375,6 +377,14 @@ const DocumentList: React.FunctionComponent<DocumentListProps> = (props) => {
 
   const onCancelClicked = useCallback(() => {
     void store.cancelOperation();
+  }, [store]);
+
+  const onCountClicked = useCallback(() => {
+    void store.runCount();
+  }, [store]);
+
+  const onCancelCountClicked = useCallback(() => {
+    store.cancelCount();
   }, [store]);
 
   const onUpdateButtonClicked = useCallback(() => {
@@ -618,6 +628,9 @@ const DocumentList: React.FunctionComponent<DocumentListProps> = (props) => {
               }
               lastCountRunMaxTimeMS={lastCountRunMaxTimeMS}
               loadingCount={loadingCount}
+              isCountRequested={isCountRequested}
+              onCountClicked={onCountClicked}
+              onCancelCountClicked={onCancelCountClicked}
               start={start}
               end={end}
               page={page}
