@@ -58,7 +58,7 @@ jobs:
 
           ## Installing
 
-          Download the `.exe` below and run it. It installs as **Compass Query Builder**, separately from any MongoDB Compass you already have, and does not disturb it.
+          Download the `.zip` below, unpack it anywhere, and run `CompassQueryBuilder.exe` inside. Nothing is installed and no administrator rights are needed, so it sits alongside any MongoDB Compass you already have without disturbing it.
 
           ## Things to know
 
