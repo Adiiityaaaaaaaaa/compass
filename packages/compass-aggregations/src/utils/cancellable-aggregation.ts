@@ -38,6 +38,7 @@ export async function aggregatePipeline({
   // before it is sent, since the server resolves `from` inside the database it
   // is running against. Pipelines without one come back untouched.
   const resolvedPipeline = await resolveCrossDbLookups(
+    namespace,
     pipeline,
     (ns, foreignPipeline) =>
       dataService.aggregate(ns, foreignPipeline, allOptions, {

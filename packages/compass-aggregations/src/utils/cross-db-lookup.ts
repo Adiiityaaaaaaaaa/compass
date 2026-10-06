@@ -185,32 +185,99 @@ export function buildEmbeddedLookupStage(
 }
 
 /** Reads the foreign side, refusing anything too large to carry. */
+/** Above this many distinct join keys, the `$in` built from them would itself
+ * be unreasonable, so the foreign collection is read whole and judged by the
+ * limits below instead. */
+export const MAX_LOCAL_KEYS = 10_000;
+
+/**
+ * The join keys the pipeline will actually look for, by running the stages
+ * that come before the lookup.
+ *
+ * Without this the whole foreign collection is read regardless of how narrow
+ * the query is, so a pipeline that matches one document still drags a
+ * collection of millions across. Returns null when there are too many keys to
+ * be worth asking with, leaving the caller to read the collection whole.
+ */
+export async function collectLocalKeys(
+  namespace: string,
+  stagesBeforeLookup: Document[],
+  localField: string,
+  aggregate: (ns: string, pipeline: Document[]) => Promise<Document[]>
+): Promise<unknown[] | null> {
+  const result = await aggregate(namespace, [
+    ...stagesBeforeLookup,
+    {
+      $group: {
+        _id: null,
+        // `$addToSet` leaves out a document whose field is missing, and
+        // `$lookup` treats a missing local field as null and matches it
+        // against a null foreign key. Without `$ifNull` those documents
+        // contribute no key, the foreign side is never asked for null, and
+        // they come back unjoined where a real $lookup would have matched.
+        keys: { $addToSet: { $ifNull: [`$${localField}`, null] } },
+      },
+    },
+  ]);
+
+  const keys = (result[0]?.keys ?? []) as unknown[];
+  // A local field holding an array joins on each of its elements, so the set
+  // has to be flattened before it can be asked for.
+  const flattened: unknown[] = [];
+  for (const key of keys) {
+    if (Array.isArray(key)) {
+      flattened.push(...key);
+    } else {
+      flattened.push(key);
+    }
+  }
+
+  // Empty only when nothing reached the lookup at all, since `$ifNull` above
+  // gives every document that does reach it a key.
+  if (flattened.length === 0) {
+    return [];
+  }
+  if (flattened.length > MAX_LOCAL_KEYS) {
+    return null;
+  }
+  return flattened;
+}
+
 export async function fetchForeignDocuments(
   lookup: CrossDbLookup,
-  aggregate: (ns: string, pipeline: Document[]) => Promise<Document[]>
+  aggregate: (ns: string, pipeline: Document[]) => Promise<Document[]>,
+  localKeys: unknown[] | null = null
 ): Promise<Document[]> {
   const ns = `${lookup.db}.${lookup.coll}`;
+  // Ask only for the documents that can match. Falls back to reading the
+  // collection when the keys are unknown or too many to ask with.
+  const match = localKeys
+    ? [{ $match: { [lookup.foreignField]: { $in: localKeys } } }]
+    : [];
   // One over the limit, so that a collection sitting exactly on it is accepted
   // and the first document past it is what proves the collection is too big.
   const documents = await aggregate(ns, [
+    ...match,
     { $limit: MAX_FOREIGN_DOCUMENTS + 1 },
   ]);
 
   if (documents.length > MAX_FOREIGN_DOCUMENTS) {
     throw new CrossDbLookupError(
-      `${ns} has more than ${MAX_FOREIGN_DOCUMENTS.toLocaleString()} documents. ` +
-        'Joining across databases carries the documents inside the query, so the collection joined to has to be small. ' +
-        'Narrow it down first, or move the collections into one database to use an ordinary $lookup.'
+      `The join to ${ns} matches more than ${MAX_FOREIGN_DOCUMENTS.toLocaleString()} documents. ` +
+        'Joining across databases carries the matched documents inside the query, so it has to stay small. ' +
+        'Narrow the pipeline before the $lookup, or move the collections into one database to use an ordinary $lookup.'
     );
   }
 
   const bytes = BSON.calculateObjectSize({ documents });
   if (bytes > MAX_FOREIGN_BYTES) {
     throw new CrossDbLookupError(
-      `${ns} is ${Math.round(bytes / 1024 / 1024)}MB, over the ${Math.round(
+      `The join to ${ns} matches ${Math.round(
+        bytes / 1024 / 1024
+      )}MB of documents, over the ${Math.round(
         MAX_FOREIGN_BYTES / 1024 / 1024
       )}MB a cross-database join can carry. ` +
-        'Narrow it down first, or move the collections into one database to use an ordinary $lookup.'
+        'Narrow the pipeline before the $lookup, or move the collections into one database to use an ordinary $lookup.'
     );
   }
 
@@ -223,6 +290,7 @@ export async function fetchForeignDocuments(
  * so this costs nothing in the ordinary case.
  */
 export async function resolveCrossDbLookups(
+  namespace: string,
   pipeline: Document[],
   aggregate: (ns: string, pipeline: Document[]) => Promise<Document[]>
 ): Promise<Document[]> {
@@ -236,7 +304,20 @@ export async function resolveCrossDbLookups(
   // first failure is the one worth reporting, and a pipeline joining several
   // collections should not open several cursors to discover that.
   for (const lookup of lookups) {
-    const documents = await fetchForeignDocuments(lookup, aggregate);
+    // The stages before this one, already resolved, so a pipeline joining a
+    // second database is narrowed by the first join as well.
+    const keys = await collectLocalKeys(
+      namespace,
+      resolved.slice(0, lookup.index),
+      lookup.localField,
+      aggregate
+    );
+    // Nothing to join against: the join matches nothing, and asking the other
+    // database would only confirm it.
+    const documents =
+      keys && keys.length === 0
+        ? []
+        : await fetchForeignDocuments(lookup, aggregate, keys);
     resolved[lookup.index] = buildEmbeddedLookupStage(lookup, documents);
   }
   return resolved;
