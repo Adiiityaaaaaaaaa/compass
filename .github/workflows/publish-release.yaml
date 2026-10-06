@@ -46,15 +46,20 @@ jobs:
         run: |
           set -e
           cat > notes.md <<'NOTICE'
-          MongoDB Compass with a visual query builder added beside the documents list.
+          MongoDB Compass with a handful of additions, mostly aimed at the things that are awkward in the stock app.
 
           ## What is different from upstream Compass
 
-          - **Drag a field out of a document.** Field names are drag sources, carrying `field: value` in shell syntax, so they can be dropped into any editor.
-          - **Drop a field onto the query bar filter** to add it to the current filter. Fields accumulate: two fields are an implicit `$and`, the same field twice becomes `$in`.
-          - **A query builder panel beside the documents list.** Drop fields into Query, Projection or Sort and it compiles them into a real query. Collapsed until opened, so the documents view is otherwise unchanged.
+          - **Collection History.** Before a document is deleted, updated or replaced, a local snapshot is kept so it can be put back. There is a Collection History button in the documents toolbar.
+          - **Copy and paste a collection.** Right-click a collection to copy it, then paste it into another database or another connection, with merge, overwrite or replace for a target that already exists.
+          - **An expanded document editor.** A full screen editor for a document, from the list, table or JSON view, with find-in-document ready on open and the document shown unfolded rather than collapsed.
+          - **A visual query builder beside the documents list.** Drop fields into Query, Projection or Sort and it compiles them into a real query, written into the normal query bar inputs. Includes a **contains** operator for case insensitive text search, so a substring does not have to be written as a regex.
+          - **Join a collection in another database.** `$lookup` cannot reach outside the database it runs in, so a pipeline can name one explicitly and Compass resolves it: `from: { db: "sales", coll: "regions" }`. The assistant knows the syntax, so it can be asked for in plain language. The joined collection is carried inside the query, so it suits reference tables rather than large collections, and anything too big is reported with its size.
+          - **Drag fields out of documents.** A field name or value can be dragged from any of the three views, and dropped onto the query bar to filter by it. Two fields combine with `$and`.
 
-          The builder writes into the normal query bar inputs, so its query is the same query, in the same boxes, as one typed by hand. Rows, open state and width are kept per tab.
+          ## One behaviour change
+
+          Double-clicking no longer puts a document into edit mode, because it was too easy to do by accident. Use right-click then Edit document, or the Edit action on the row.
 
           ## Installing
 
@@ -63,6 +68,7 @@ jobs:
           ## Things to know
 
           - **Unsigned.** Windows SmartScreen will warn on first run: click More info, then Run anyway.
+          - **Collection History is a convenience, not a backup.** Snapshots are kept on your own machine, capped at 500 entries, and a bulk delete is only covered for its first 1000 documents. Do not rely on it for anything that matters.
           - **Third party licence notices are a placeholder.** They are produced by MongoDB's release system, which a fork cannot reach. Fine for personal and team use, not for public redistribution.
           - **SSPL v1**, the same licence as upstream Compass.
           - Not affiliated with or endorsed by MongoDB, Inc.
