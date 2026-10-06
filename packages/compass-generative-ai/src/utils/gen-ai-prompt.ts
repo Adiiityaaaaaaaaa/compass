@@ -54,7 +54,25 @@ function buildInstructionsForAggregateQuery() {
     '- Do not use database-level aggregation stages ' +
       'such as $documents, $changeStream, $changeStreamSplitLargeEvent, $currentOp, $listLocalSessions, or $queryStats. ' +
       'This aggregation runs against a collection, not a database.',
+    buildInstructionsForCrossDbLookup(),
     `- The current date is ${getCurrentTimeString()}`,
+  ].join('\n');
+}
+
+/**
+ * Compass resolves a $lookup naming another database before sending the
+ * pipeline, so the model is told the syntax exists. Without this it refuses
+ * cross-database joins, correctly, because the server cannot do them.
+ */
+function buildInstructionsForCrossDbLookup() {
+  return [
+    '- To join a collection in a DIFFERENT database, give $lookup an object `from` ' +
+      'naming the database and collection: ' +
+      '{ $lookup: { from: { db: "otherDb", coll: "otherColl" }, localField: "x", foreignField: "y", as: "joined" } }. ' +
+      'Use this only when the request names another database; a collection in the current database takes a plain string `from`.',
+    '  - The object form supports localField, foreignField and as only. Do not give it `let` or its own `pipeline`.',
+    '  - The joined collection is carried inside the query, so it must be small. ' +
+      'Prefer it for lookup or reference tables rather than large collections.',
   ].join('\n');
 }
 
