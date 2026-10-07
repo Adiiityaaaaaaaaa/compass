@@ -3,11 +3,6 @@ import parseNs from 'mongodb-ns';
 import type { Document } from 'bson';
 import type { CreateViewThunkAction } from '../../stores/create-view';
 import { isAction } from '../../utils/is-action';
-import {
-  findCrossDbLookups,
-  rewriteLookupsForView,
-  viewCopyName,
-} from '../../utils/cross-db-lookup';
 
 export type CreateViewState = {
   connectionId: string;
@@ -224,37 +219,10 @@ export const createView = (): CreateViewThunkAction<Promise<void>> => {
       const dataService = connections.getDataServiceForConnection(connectionId);
 
       dispatch(toggleIsRunning(true));
-
-      // A view is stored and run by the server, which cannot reach another
-      // database, so a cross-database $lookup cannot be saved as one. Rather
-      // than refuse, the foreign collection is copied into this database and
-      // the view points at the copy.
-      //
-      // $out does the copying on the server, so nothing travels through
-      // Compass and the size limits that apply to running a cross-database
-      // join do not apply here.
-      //
-      // The copy is a snapshot: the view is live against its source, and only
-      // as current as the last copy on the joined side. It is a collection
-      // rather than documents hidden in the view definition precisely so that
-      // this is visible and can be refreshed.
-      const crossDbLookups = findCrossDbLookups(viewPipeline as Document[]);
-      for (const lookup of crossDbLookups) {
-        // $out replaces the target outright, so the name it is aimed at has to
-        // be one nobody else would have used. The `__compass_xdb_` prefix is
-        // what makes that true: the only thing a copy can ever overwrite is an
-        // earlier copy of the same collection, which is what refreshing one
-        // means anyway.
-        const copyName = viewCopyName(lookup);
-        await dataService.aggregate(`${lookup.db}.${lookup.coll}`, [
-          { $out: { db: database, coll: copyName } },
-        ]);
-      }
-
       await dataService.createView(
         viewName,
         viewSource,
-        rewriteLookupsForView(viewPipeline as Document[]),
+        viewPipeline as Document[],
         options
       );
       const ns = `${database}.${viewName}`;

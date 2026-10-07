@@ -184,46 +184,6 @@ export function buildEmbeddedLookupStage(
   };
 }
 
-/**
- * Collections made to back a view, named so that they are recognisable as
- * Compass's own and never mistaken for something somebody made by hand.
- */
-export const VIEW_COPY_PREFIX = '__compass_xdb_';
-
-export function viewCopyName(lookup: CrossDbLookup): string {
-  return `${VIEW_COPY_PREFIX}${lookup.db}_${lookup.coll}`;
-}
-
-/**
- * The pipeline a view can actually hold, with each cross-database `$lookup`
- * pointed at a copy of the foreign collection sitting in the view's own
- * database.
- *
- * A view is stored and run by the server, which cannot reach another database,
- * so the only way to have one at all is for the collection to be local. The
- * copy is a snapshot and the view is only as current as the last copy, which
- * is why it is a collection anybody can see and refresh rather than documents
- * hidden inside the view definition.
- */
-export function rewriteLookupsForView(pipeline: Document[]): Document[] {
-  const lookups = findCrossDbLookups(pipeline);
-  if (lookups.length === 0) {
-    return pipeline;
-  }
-  const rewritten = [...pipeline];
-  for (const lookup of lookups) {
-    rewritten[lookup.index] = {
-      $lookup: {
-        from: viewCopyName(lookup),
-        localField: lookup.localField,
-        foreignField: lookup.foreignField,
-        as: lookup.as,
-      },
-    };
-  }
-  return rewritten;
-}
-
 /** Reads the foreign side, refusing anything too large to carry. */
 /** Above this many distinct join keys, the `$in` built from them would itself
  * be unreasonable, so the foreign collection is read whole and judged by the

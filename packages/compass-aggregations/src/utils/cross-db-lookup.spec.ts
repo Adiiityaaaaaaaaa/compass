@@ -5,8 +5,6 @@ import {
   MAX_FOREIGN_DOCUMENTS,
   MAX_LOCAL_KEYS,
   collectLocalKeys,
-  rewriteLookupsForView,
-  viewCopyName,
   buildEmbeddedLookupStage,
   findCrossDbLookups,
   hasCrossDbLookup,
@@ -302,37 +300,6 @@ describe('cross-db-lookup', function () {
         expect(err).to.be.instanceOf(CrossDbLookupError);
         expect((err as Error).message).to.match(/MB/);
       }
-    });
-  });
-
-  describe('rewriteLookupsForView', function () {
-    it('points the lookup at a local copy, which a view can reach', function () {
-      const rewritten = rewriteLookupsForView([{ $match: {} }, crossDbStage]);
-      expect(rewritten[1]).to.deep.equal({
-        $lookup: {
-          from: '__compass_xdb_sales_regions',
-          localField: 'regionId',
-          foreignField: '_id',
-          as: 'region',
-        },
-      });
-    });
-
-    it('names the copy after the collection it came from', function () {
-      expect(viewCopyName(findCrossDbLookups([crossDbStage])[0])).to.equal(
-        '__compass_xdb_sales_regions'
-      );
-    });
-
-    it('leaves a pipeline without a cross database lookup untouched', function () {
-      const pipeline = [{ $match: { a: 1 } }];
-      expect(rewriteLookupsForView(pipeline)).to.equal(pipeline);
-    });
-
-    it('does not alter the pipeline it was given', function () {
-      const pipeline = [crossDbStage];
-      rewriteLookupsForView(pipeline);
-      expect(pipeline[0]).to.deep.equal(crossDbStage);
     });
   });
 });
