@@ -406,7 +406,8 @@ export const QueryBuilderPanel: React.FunctionComponent<
                     valueText: valueTextForOperator(
                       condition.valueText,
                       condition.operator,
-                      operator as ConditionOperator
+                      operator as ConditionOperator,
+                      condition.value
                     ),
                   })
                 }

@@ -182,7 +182,9 @@ export function valueToShellText(value: unknown): string {
 export function valueTextForOperator(
   valueText: string,
   from: ConditionOperator,
-  to: ConditionOperator
+  to: ConditionOperator,
+  /** The value dragged into the row, when the box still shows it untouched. */
+  knownValue?: unknown
 ): string {
   const wasList = from === 'in' || from === 'nin';
   const isList = to === 'in' || to === 'nin';
@@ -191,6 +193,11 @@ export function valueTextForOperator(
   }
 
   if (isList) {
+    // A known value keeps its type: a dragged "12" is a string, and reading
+    // its text back would quietly turn it into the number 12.
+    if (knownValue !== undefined && valueText === valueToText(knownValue)) {
+      return `[${valueToShellText(knownValue)}]`;
+    }
     const parsed = parseListText(valueText);
     if (!parsed.ok || !Array.isArray(parsed.value)) {
       // Nothing to carry over, so just show the empty list.
@@ -285,10 +292,30 @@ function containsText(valueText: string): string {
  * it untouched, and otherwise whatever the box now says.
  */
 function readValue(row: ConditionRow): ParsedValue {
-  if (row.value !== undefined && row.valueText === valueToText(row.value)) {
+  if (hasUntouchedDraggedValue(row)) {
     return { ok: true, value: row.value };
   }
   return parseValueText(row.valueText);
+}
+
+/** True while the box still shows exactly what was dragged into it. */
+function hasUntouchedDraggedValue(row: ConditionRow): boolean {
+  return row.value !== undefined && row.valueText === valueToText(row.value);
+}
+
+/**
+ * The list a row stands for.
+ *
+ * A value dragged in is one value whose type is known, so the list is built
+ * around it rather than read back out of its text: a reference like
+ * "1300932190" is a string, and reading the text would make it a number and
+ * match nothing.
+ */
+function readListValue(row: ConditionRow): ParsedValue {
+  if (hasUntouchedDraggedValue(row)) {
+    return { ok: true, value: [row.value] };
+  }
+  return parseListText(row.valueText);
 }
 
 function conditionToFilterFragment(
@@ -311,7 +338,7 @@ function conditionToFilterFragment(
 
   const parsed =
     row.operator === 'in' || row.operator === 'nin'
-      ? parseListText(row.valueText)
+      ? readListValue(row)
       : readValue(row);
   if (!parsed.ok) {
     return { error: `${row.field}: ${parsed.error}` };

@@ -153,6 +153,16 @@ describe('builder-query', function () {
       expect(valueTextForOperator('1, 2', 'eq', 'in')).to.equal('[1, 2]');
     });
 
+    it('keeps a dragged string a string when wrapping it', function () {
+      // Reading the text back would make "12" the number 12, which matches
+      // nothing on a string field.
+      expect(valueTextForOperator('12', 'eq', 'in', '12')).to.equal("['12']");
+    });
+
+    it('still wraps a genuine number as a number', function () {
+      expect(valueTextForOperator('12', 'eq', 'in', 12)).to.equal('[12]');
+    });
+
     it('drops the brackets again when leaving in', function () {
       expect(valueTextForOperator("['a', 'b']", 'in', 'eq')).to.equal('a, b');
     });
@@ -296,6 +306,24 @@ describe('builder-query', function () {
         status: { $in: ['shipped', 'pending'] },
       });
       expect(compiled.errors).to.be.empty;
+    });
+
+    it('keeps a dragged string a string inside an in list', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'in',
+              valueText: '1300932190',
+              value: '1300932190',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({
+        reference: { $in: ['1300932190'] },
+      });
     });
 
     it('keeps a dragged string a string, even when it is all digits', function () {
