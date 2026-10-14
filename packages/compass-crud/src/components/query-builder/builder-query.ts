@@ -159,6 +159,54 @@ export function parseValueText(text: string): ParsedValue {
   return { ok: true, value: trimmed };
 }
 
+/** A value written the way the query bar writes it, with strings quoted. */
+export function valueToShellText(value: unknown): string {
+  if (value === undefined) {
+    return '';
+  }
+  const asQuery = toJSString({ v: value }) ?? '';
+  const match = /v:\s*([\s\S]*?)\s*\}\s*$/.exec(asQuery);
+  return match ? match[1] : String(value);
+}
+
+/**
+ * The text to show when a row changes operator.
+ *
+ * `in` takes a list, so the box shows one: picking it puts the brackets there,
+ * with whatever was already written quoted inside them, rather than leaving a
+ * list to be assembled by hand. Picking something else takes them away again.
+ *
+ * Only the text changes. Both shapes are read either way, so this is about
+ * what the box looks like rather than what it will accept.
+ */
+export function valueTextForOperator(
+  valueText: string,
+  from: ConditionOperator,
+  to: ConditionOperator
+): string {
+  const wasList = from === 'in' || from === 'nin';
+  const isList = to === 'in' || to === 'nin';
+  if (wasList === isList) {
+    return valueText;
+  }
+
+  if (isList) {
+    const parsed = parseListText(valueText);
+    if (!parsed.ok || !Array.isArray(parsed.value)) {
+      // Nothing to carry over, so just show the empty list.
+      return '[]';
+    }
+    return `[${parsed.value.map(valueToShellText).join(', ')}]`;
+  }
+
+  // Leaving a list behind: keep the values, drop the brackets.
+  const parsed = parseListText(valueText);
+  if (!parsed.ok || !Array.isArray(parsed.value)) {
+    return valueText;
+  }
+  return parsed.value.map((value) => valueToText(value)).join(', ');
+}
+
 /**
  * The values for `in` and `not in`, which take a list rather than one value.
  *

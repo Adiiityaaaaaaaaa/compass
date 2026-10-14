@@ -27,6 +27,7 @@ import {
   isValuelessOperator,
   nextRowId,
   valueToText,
+  valueTextForOperator,
 } from './builder-query';
 
 const panel = css({
@@ -401,6 +402,12 @@ export const QueryBuilderPanel: React.FunctionComponent<
                 onChange={(operator) =>
                   updateCondition(condition.id, {
                     operator: operator as ConditionOperator,
+                    // Picking `in` shows the list it takes, brackets and all.
+                    valueText: valueTextForOperator(
+                      condition.valueText,
+                      condition.operator,
+                      operator as ConditionOperator
+                    ),
                   })
                 }
               >

@@ -7,6 +7,7 @@ import {
   compiledQueryToAppliedQuery,
   parseValueText,
   parseListText,
+  valueTextForOperator,
   valueToText,
 } from './builder-query';
 
@@ -130,6 +131,35 @@ describe('builder-query', function () {
         ok: false,
         error: 'Value is empty',
       });
+    });
+  });
+
+  describe('valueTextForOperator', function () {
+    it('shows an empty list when in is picked with nothing written', function () {
+      expect(valueTextForOperator('', 'eq', 'in')).to.equal('[]');
+    });
+
+    it('wraps and quotes what was already there', function () {
+      expect(valueTextForOperator('London', 'eq', 'in')).to.equal("['London']");
+    });
+
+    it('wraps several values written with commas', function () {
+      expect(valueTextForOperator('shipped, pending', 'eq', 'in')).to.equal(
+        "['shipped', 'pending']"
+      );
+    });
+
+    it('does not quote numbers', function () {
+      expect(valueTextForOperator('1, 2', 'eq', 'in')).to.equal('[1, 2]');
+    });
+
+    it('drops the brackets again when leaving in', function () {
+      expect(valueTextForOperator("['a', 'b']", 'in', 'eq')).to.equal('a, b');
+    });
+
+    it('leaves the text alone when the shape does not change', function () {
+      expect(valueTextForOperator('London', 'eq', 'ne')).to.equal('London');
+      expect(valueTextForOperator("['a']", 'in', 'nin')).to.equal("['a']");
     });
   });
 
