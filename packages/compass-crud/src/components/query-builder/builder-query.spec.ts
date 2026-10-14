@@ -6,6 +6,7 @@ import {
   compileBuilderState,
   compiledQueryToAppliedQuery,
   parseValueText,
+  parseListText,
   valueToText,
 } from './builder-query';
 
@@ -26,8 +27,8 @@ function state(overrides: Partial<BuilderState> = {}): BuilderState {
 
 describe('builder-query', function () {
   describe('valueToText', function () {
-    it('renders a string the way the query bar does', function () {
-      expect(valueToText('London')).to.equal("'London'");
+    it('renders a string as itself, since the box takes plain text', function () {
+      expect(valueToText('London')).to.equal('London');
     });
 
     it('renders BSON types in shell syntax', function () {
@@ -65,9 +66,70 @@ describe('builder-query', function () {
       });
     });
 
-    it('reports a parse failure instead of throwing', function () {
-      const parsed = parseValueText('{ this is not valid');
-      expect(parsed.ok).to.equal(false);
+    it('reads a bare word as a string, so quoting is not required', function () {
+      expect(parseValueText('London')).to.deep.equal({
+        ok: true,
+        value: 'London',
+      });
+    });
+
+    it('still reads numbers, booleans and BSON as themselves', function () {
+      expect(parseValueText('42')).to.deep.equal({ ok: true, value: 42 });
+      expect(parseValueText('true')).to.deep.equal({ ok: true, value: true });
+      const oid = parseValueText("ObjectId('6a709bfd0ce4efdf334e9979')");
+      expect(String((oid as { value: unknown }).value)).to.equal(
+        '6a709bfd0ce4efdf334e9979'
+      );
+    });
+
+    it('reports broken syntax, rather than taking it as a string', function () {
+      // Opens with a brace, so it was meant as syntax.
+      expect(parseValueText('{ this is not valid').ok).to.equal(false);
+      expect(parseValueText("'unterminated").ok).to.equal(false);
+    });
+
+    it('still takes a word containing a quote as text', function () {
+      expect(parseValueText("don't")).to.deep.equal({
+        ok: true,
+        value: "don't",
+      });
+    });
+  });
+
+  describe('parseListText', function () {
+    it('splits a bare list on commas', function () {
+      expect(parseListText('shipped, pending')).to.deep.equal({
+        ok: true,
+        value: ['shipped', 'pending'],
+      });
+    });
+
+    it('reads an explicit list as one', function () {
+      expect(parseListText("['a', 'b']")).to.deep.equal({
+        ok: true,
+        value: ['a', 'b'],
+      });
+    });
+
+    it('keeps numbers as numbers', function () {
+      expect(parseListText('1, 2, 3')).to.deep.equal({
+        ok: true,
+        value: [1, 2, 3],
+      });
+    });
+
+    it('ignores a trailing comma', function () {
+      expect(parseListText('a, b,')).to.deep.equal({
+        ok: true,
+        value: ['a', 'b'],
+      });
+    });
+
+    it('reports empty input', function () {
+      expect(parseListText('  ')).to.deep.equal({
+        ok: false,
+        error: 'Value is empty',
+      });
     });
   });
 
@@ -186,6 +248,69 @@ describe('builder-query', function () {
         cancelledAt: { $exists: false },
       });
       expect(compiled.errors).to.be.empty;
+    });
+
+    it('builds a list for in, from values typed without brackets', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'status',
+              operator: 'in',
+              valueText: 'shipped, pending',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({
+        status: { $in: ['shipped', 'pending'] },
+      });
+      expect(compiled.errors).to.be.empty;
+    });
+
+    it('keeps a dragged string a string, even when it is all digits', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'eq',
+              valueText: '1300932190',
+              value: '1300932190',
+            }),
+          ],
+        })
+      );
+      // The text alone reads as a number; the document it came from says
+      // otherwise, and a reference that became a number would match nothing.
+      expect(compiled.filter).to.deep.equal({ reference: '1300932190' });
+    });
+
+    it('forgets the dragged value once the text is edited', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'eq',
+              valueText: '42',
+              value: '1300932190',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({ reference: 42 });
+    });
+
+    it('takes an unquoted word as a string', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({ field: 'city', operator: 'eq', valueText: 'London' }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({ city: 'London' });
     });
 
     it('compiles contains to a case insensitive regex', function () {
@@ -326,7 +451,7 @@ describe('builder-query', function () {
       expect(compiled.sort).to.deep.equal({ timestamp: 1, total: -1 });
     });
 
-    it('honours the section toggles', function () {
+    it('contributes nothing once every row is cleared', function () {
       const full = state({
         conditions: [condition({})],
         projections: [
@@ -335,10 +460,13 @@ describe('builder-query', function () {
         sorts: [
           { id: 's1', field: 'timestamp', direction: 'asc', enabled: true },
         ],
-        queryEnabled: false,
-        projectionEnabled: false,
-        sortEnabled: false,
       });
+      full.conditions = full.conditions.map((r) => ({ ...r, enabled: false }));
+      full.projections = full.projections.map((r) => ({
+        ...r,
+        enabled: false,
+      }));
+      full.sorts = full.sorts.map((r) => ({ ...r, enabled: false }));
       const compiled = compileBuilderState(full);
       expect(compiled.filter).to.deep.equal({});
       expect(compiled.project).to.equal(null);
@@ -392,14 +520,13 @@ describe('builder-query', function () {
       expect(query.project).to.equal(undefined);
     });
 
-    it('clears the projection when the section is switched off', function () {
+    it('clears the projection when every row is cleared', function () {
       const query = compiledQueryToAppliedQuery(
         compileBuilderState(
           state({
             projections: [
-              { id: 'p1', field: 'firstName', mode: 'include', enabled: true },
+              { id: 'p1', field: 'firstName', mode: 'include', enabled: false },
             ],
-            projectionEnabled: false,
           })
         )
       );

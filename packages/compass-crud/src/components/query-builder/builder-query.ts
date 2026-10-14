@@ -48,8 +48,19 @@ export type ConditionRow = {
   id: string;
   field: string;
   operator: ConditionOperator;
-  /** Shell syntax, the same language the query bar uses. */
+  /** What the box shows. Plain text; see `parseValueText`. */
   valueText: string;
+  /**
+   * The value exactly as it came from the document it was dragged from, kept
+   * while the box still shows it untouched.
+   *
+   * The box is plain text, so a string of digits is indistinguishable from a
+   * number once written down. A reference like "1300932190" is a string in the
+   * document and must stay one, and the only thing that knows that is the
+   * document it came from. Cleared the moment the text is edited, because from
+   * then on the text is what the person means.
+   */
+  value?: unknown;
   enabled: boolean;
 };
 
@@ -72,10 +83,6 @@ export type BuilderState = {
   conditions: ConditionRow[];
   projections: ProjectionRow[];
   sorts: SortRow[];
-  /** Section level toggles, mirroring the checkbox on each section header. */
-  queryEnabled: boolean;
-  projectionEnabled: boolean;
-  sortEnabled: boolean;
   skip: string;
   limit: string;
 };
@@ -85,9 +92,6 @@ export const EMPTY_BUILDER_STATE: BuilderState = {
   conditions: [],
   projections: [],
   sorts: [],
-  queryEnabled: true,
-  projectionEnabled: true,
-  sortEnabled: true,
   skip: '',
   limit: '',
 };
@@ -105,6 +109,11 @@ export function nextRowId(prefix: string): string {
 export function valueToText(value: unknown): string {
   if (value === undefined) {
     return '';
+  }
+  // A string is shown as itself. Quoting it would be noise in a box that
+  // accepts plain text anyway, and the row remembers that it was a string.
+  if (typeof value === 'string') {
+    return value;
   }
   const asQuery = toJSString({ v: value }) ?? '';
   // toJSString always produces a pretty printed document; take what is between
@@ -131,13 +140,64 @@ export function parseValueText(text: string): ParsedValue {
       string,
       unknown
     >;
-    if (!parsed || !('__value' in parsed)) {
-      return { ok: false, error: 'Value could not be read' };
+    if (parsed && '__value' in parsed) {
+      return { ok: true, value: parsed.__value };
     }
-    return { ok: true, value: parsed.__value };
   } catch (err) {
-    return { ok: false, error: (err as Error).message };
+    // Text that opens with a bracket, a quote or a slash was an attempt at
+    // syntax, so a failure to read it is a mistake worth reporting rather than
+    // a string that happens to start with a brace. `{ oops` should be an
+    // error; `don't` should not.
+    if (/^[[{'"/]/.test(trimmed)) {
+      return { ok: false, error: (err as Error).message };
+    }
   }
+  // Anything else is the text itself. `London` means 'London' without having
+  // to be written that way, which is the point of the box holding plain text.
+  // Numbers, booleans, ObjectId(…), ISODate(…) and regexes are still read as
+  // themselves, because the parser takes those.
+  return { ok: true, value: trimmed };
+}
+
+/**
+ * The values for `in` and `not in`, which take a list rather than one value.
+ *
+ * Written as a list, as a bare set of values, or as a single value, since
+ * switching an existing row to `in` should not break it.
+ */
+export function parseListText(text: string): ParsedValue {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return { ok: false, error: 'Value is empty' };
+  }
+
+  // An explicit list is read as one, so `['a', 'b']` and `[1, 2]` keep working.
+  if (trimmed.startsWith('[')) {
+    const parsed = parseValueText(trimmed);
+    if (parsed.ok && Array.isArray(parsed.value)) {
+      return parsed;
+    }
+  }
+
+  // Otherwise the commas separate the values, and each is read the same way a
+  // single value is: `a, b` is two strings, `1, 2` is two numbers.
+  const parts = trimmed
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+  if (parts.length === 0) {
+    return { ok: false, error: 'Value is empty' };
+  }
+
+  const values: unknown[] = [];
+  for (const part of parts) {
+    const parsed = parseValueText(part);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    values.push(parsed.value);
+  }
+  return { ok: true, value: values };
 }
 
 /**
@@ -172,6 +232,17 @@ function containsText(valueText: string): string {
   return valueText.trim();
 }
 
+/**
+ * The value a row stands for: what was dragged in, while the box still shows
+ * it untouched, and otherwise whatever the box now says.
+ */
+function readValue(row: ConditionRow): ParsedValue {
+  if (row.value !== undefined && row.valueText === valueToText(row.value)) {
+    return { ok: true, value: row.value };
+  }
+  return parseValueText(row.valueText);
+}
+
 function conditionToFilterFragment(
   row: ConditionRow
 ): { field: string; value: unknown } | { error: string } {
@@ -182,8 +253,6 @@ function conditionToFilterFragment(
     return { field: row.field, value: { $exists: false } };
   }
 
-  // Handled before the shared parse below: this is the one operator whose box
-  // holds plain text, so `london` must not have to be written as `'london'`.
   if (row.operator === 'contains') {
     const text = containsText(row.valueText);
     if (text === '') {
@@ -192,7 +261,10 @@ function conditionToFilterFragment(
     return { field: row.field, value: new RegExp(escapeRegExp(text), 'i') };
   }
 
-  const parsed = parseValueText(row.valueText);
+  const parsed =
+    row.operator === 'in' || row.operator === 'nin'
+      ? parseListText(row.valueText)
+      : readValue(row);
   if (!parsed.ok) {
     return { error: `${row.field}: ${parsed.error}` };
   }
@@ -202,8 +274,8 @@ function conditionToFilterFragment(
       return { field: row.field, value: parsed.value };
     case 'in':
     case 'nin': {
-      // `in` needs a list. A single value is accepted and wrapped, so that
-      // switching operator on an existing row does not immediately break it.
+      // A single value is accepted and wrapped, so that switching an existing
+      // row to `in` does not immediately break it.
       const list = Array.isArray(parsed.value) ? parsed.value : [parsed.value];
       return { field: row.field, value: { [`$${row.operator}`]: list } };
     }
@@ -313,16 +385,15 @@ function compileCount(
 }
 
 export function compileBuilderState(state: BuilderState): CompiledQuery {
-  const { filter, errors } = state.queryEnabled
-    ? compileConditions(state)
-    : { filter: {}, errors: [] };
+  // A section contributes nothing once every row in it is switched off, which
+  // is what the tick on its header now does, so there is no separate section
+  // level flag to consult.
+  const { filter, errors } = compileConditions(state);
 
-  const projectionRows = state.projectionEnabled
-    ? state.projections.filter((row) => row.enabled && row.field)
-    : [];
-  const sortRows = state.sortEnabled
-    ? state.sorts.filter((row) => row.enabled && row.field)
-    : [];
+  const projectionRows = state.projections.filter(
+    (row) => row.enabled && row.field
+  );
+  const sortRows = state.sorts.filter((row) => row.enabled && row.field);
 
   const project = projectionRows.length
     ? Object.fromEntries(

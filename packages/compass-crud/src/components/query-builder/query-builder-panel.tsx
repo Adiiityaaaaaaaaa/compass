@@ -234,26 +234,47 @@ const RowShell: React.FunctionComponent<{
   );
 };
 
+/**
+ * The tick on a section header selects every row in it, or clears them all.
+ *
+ * It used to switch the section off as a whole, which was a second way of
+ * saying what the row ticks already said. Selecting all of them is the thing
+ * that is tedious to do by hand, and a section with nothing selected
+ * contributes nothing anyway, so the two readings end in the same query.
+ */
 const SectionShell: React.FunctionComponent<{
   title: string;
-  enabled: boolean;
-  onEnabledChange: (enabled: boolean) => void;
+  /** Omitted by a section that has no rows to select. */
+  rowsSelected?: { selected: number; total: number };
+  onSelectAll?: (selected: boolean) => void;
   headerExtra?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ title, enabled, onEnabledChange, headerExtra, children }) => {
+}> = ({ title, rowsSelected, onSelectAll, headerExtra, children }) => {
   const darkMode = useDarkMode();
+  const all = rowsSelected
+    ? rowsSelected.total > 0 && rowsSelected.selected === rowsSelected.total
+    : false;
+  const some = rowsSelected ? rowsSelected.selected > 0 && !all : false;
   return (
     <section className={cx(section, darkMode && sectionDark)}>
       <div className={cx(sectionHeader, darkMode && sectionHeaderDark)}>
         <Body weight="medium">{title}</Body>
         <div className={toolbar}>
           {headerExtra}
-          <Checkbox
-            aria-label={`Use ${title.toLowerCase()}`}
-            title={`Use ${title.toLowerCase()}`}
-            checked={enabled}
-            onChange={(event) => onEnabledChange(event.target.checked)}
-          />
+          {rowsSelected && onSelectAll && (
+            <Checkbox
+              aria-label={
+                all
+                  ? `Clear every ${title.toLowerCase()} row`
+                  : `Select every ${title.toLowerCase()} row`
+              }
+              title={all ? 'Clear all' : 'Select all'}
+              disabled={rowsSelected.total === 0}
+              checked={all}
+              indeterminate={some}
+              onChange={() => onSelectAll(!all)}
+            />
+          )}
         </div>
       </div>
       <div className={sectionBody}>{children}</div>
@@ -299,8 +320,18 @@ export const QueryBuilderPanel: React.FunctionComponent<
     <div className={panel} data-testid="query-builder-panel">
       <SectionShell
         title="Query"
-        enabled={state.queryEnabled}
-        onEnabledChange={(queryEnabled) => update({ queryEnabled })}
+        rowsSelected={{
+          selected: state.conditions.filter((row) => row.enabled).length,
+          total: state.conditions.length,
+        }}
+        onSelectAll={(selected) =>
+          update({
+            conditions: state.conditions.map((row) => ({
+              ...row,
+              enabled: selected,
+            })),
+          })
+        }
       >
         <div className={toolbar}>
           <div className={grow}>
@@ -398,6 +429,9 @@ export const QueryBuilderPanel: React.FunctionComponent<
                   onChange={(event) =>
                     updateCondition(condition.id, {
                       valueText: event.target.value,
+                      // Typing replaces what was dragged in: from here the
+                      // text is what the person means, including its type.
+                      value: undefined,
                     })
                   }
                 />
@@ -418,6 +452,8 @@ export const QueryBuilderPanel: React.FunctionComponent<
                   field,
                   operator: 'eq',
                   valueText: valueToText(value),
+                  // Kept so that a string of digits stays a string.
+                  value,
                   enabled: true,
                 },
               ],
@@ -442,8 +478,18 @@ export const QueryBuilderPanel: React.FunctionComponent<
 
       <SectionShell
         title="Projection"
-        enabled={state.projectionEnabled}
-        onEnabledChange={(projectionEnabled) => update({ projectionEnabled })}
+        rowsSelected={{
+          selected: state.projections.filter((row) => row.enabled).length,
+          total: state.projections.length,
+        }}
+        onSelectAll={(selected) =>
+          update({
+            projections: state.projections.map((row) => ({
+              ...row,
+              enabled: selected,
+            })),
+          })
+        }
       >
         {state.projections.map((projection) => (
           <RowShell
@@ -536,8 +582,15 @@ export const QueryBuilderPanel: React.FunctionComponent<
 
       <SectionShell
         title="Sort"
-        enabled={state.sortEnabled}
-        onEnabledChange={(sortEnabled) => update({ sortEnabled })}
+        rowsSelected={{
+          selected: state.sorts.filter((row) => row.enabled).length,
+          total: state.sorts.length,
+        }}
+        onSelectAll={(selected) =>
+          update({
+            sorts: state.sorts.map((row) => ({ ...row, enabled: selected })),
+          })
+        }
       >
         {state.sorts.map((sortRow) => (
           <RowShell
@@ -620,11 +673,7 @@ export const QueryBuilderPanel: React.FunctionComponent<
         />
       </SectionShell>
 
-      <SectionShell
-        title="Skip and limit"
-        enabled={true}
-        onEnabledChange={() => undefined}
-      >
+      <SectionShell title="Skip and limit">
         <div className={toolbar}>
           <div className={grow}>
             <TextInput
