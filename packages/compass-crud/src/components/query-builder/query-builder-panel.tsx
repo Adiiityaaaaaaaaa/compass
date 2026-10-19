@@ -19,6 +19,7 @@ import type {
   BuilderState,
   ConditionOperator,
   ConditionRow,
+  ValueType,
   ProjectionRow,
   SortRow,
 } from './builder-query';
@@ -28,6 +29,10 @@ import {
   nextRowId,
   valueToText,
   valueTextForOperator,
+  VALUE_TYPES,
+  detectValueType,
+  conditionValue,
+  takesTypedValue,
 } from './builder-query';
 
 const panel = css({
@@ -94,6 +99,7 @@ const valueCell = css({ flex: '1 1 110px', minWidth: 96 });
 // Wide enough for the longest label in each menu, since a select's menu is as
 // wide as its trigger and a narrow one wraps every option onto several lines.
 const operatorCell = css({ flex: '0 0 136px' });
+const typeCell = css({ flex: '0 0 124px' });
 const modeCell = css({ flex: '0 0 120px' });
 const directionCell = css({ flex: '0 0 152px' });
 
@@ -443,6 +449,33 @@ export const QueryBuilderPanel: React.FunctionComponent<
                     })
                   }
                 />
+              </div>
+            )}
+            {takesTypedValue(condition.operator) && (
+              <div className={typeCell}>
+                <Select
+                  aria-label="Value type"
+                  size="small"
+                  allowDeselect={false}
+                  // Nothing chosen yet shows what the value already is, so
+                  // the menu opens on the type in force rather than on blank.
+                  value={
+                    condition.valueType ??
+                    detectValueType(conditionValue(condition)) ??
+                    'String'
+                  }
+                  onChange={(valueType) =>
+                    updateCondition(condition.id, {
+                      valueType: valueType as ValueType,
+                    })
+                  }
+                >
+                  {VALUE_TYPES.map((type) => (
+                    <Option key={type} value={type} className={optionLabel}>
+                      {type}
+                    </Option>
+                  ))}
+                </Select>
               </div>
             )}
           </RowShell>

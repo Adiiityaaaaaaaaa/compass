@@ -1,4 +1,5 @@
 import { parseFilter, toJSString } from 'mongodb-query-parser';
+import TypeChecker from 'hadron-type-checker';
 
 /**
  * The visual query builder keeps its own rows and compiles them into a query.
@@ -44,6 +45,58 @@ export function isValuelessOperator(operator: ConditionOperator): boolean {
   return operator === 'exists' || operator === 'notExists';
 }
 
+/**
+ * The types a value can be given explicitly.
+ *
+ * A subset of what Compass can cast to, rather than all of it: these are the
+ * ones a query is written against. Array and Object are left out because the
+ * box holds one value, and the structural markers like MinKey have no use in
+ * a filter written by hand.
+ */
+export const VALUE_TYPES = [
+  'String',
+  'Int32',
+  'Int64',
+  'Double',
+  'Decimal128',
+  'Boolean',
+  'Date',
+  'ObjectId',
+  'UUID',
+  'Null',
+] as const;
+
+export type ValueType = (typeof VALUE_TYPES)[number];
+
+export function isValueType(type: string): type is ValueType {
+  return (VALUE_TYPES as readonly string[]).includes(type);
+}
+
+/** What a value already is, so the dropdown opens on the right entry. */
+export function detectValueType(value: unknown): ValueType | undefined {
+  try {
+    const detected = TypeChecker.type(value);
+    return isValueType(detected) ? detected : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reads a value as the type asked for, or says why it cannot be. */
+export function castValue(value: unknown, type: ValueType): ParsedValue {
+  try {
+    const cast = TypeChecker.cast(value, type);
+    // A number that will not parse comes back as NaN rather than throwing,
+    // and NaN in a filter matches nothing without saying so.
+    if (typeof cast === 'number' && Number.isNaN(cast)) {
+      return { ok: false, error: `${String(value)} is not a ${type}` };
+    }
+    return { ok: true, value: cast };
+  } catch {
+    return { ok: false, error: `${String(value)} is not a ${type}` };
+  }
+}
+
 export type ConditionRow = {
   id: string;
   field: string;
@@ -61,6 +114,12 @@ export type ConditionRow = {
    * then on the text is what the person means.
    */
   value?: unknown;
+  /**
+   * The type the value is read as, when it has been chosen rather than left to
+   * be worked out. This is how `12` is said to be the string "12" and not the
+   * number, which the text alone cannot say.
+   */
+  valueType?: ValueType;
   enabled: boolean;
 };
 
@@ -318,6 +377,60 @@ function readListValue(row: ConditionRow): ParsedValue {
   return parseListText(row.valueText);
 }
 
+/** Casts what was read to the chosen type, if one was chosen. */
+/**
+ * Whether the type dropdown applies to this operator.
+ *
+ * `exists` reads no value at all, and `contains` is always a search for text,
+ * so neither has a type to choose.
+ */
+export function takesTypedValue(operator: ConditionOperator): boolean {
+  return !isValuelessOperator(operator) && operator !== 'contains';
+}
+
+/**
+ * The value a row currently holds, for showing which type it is. Unlike the
+ * compile path this never fails: a box mid-edit is simply not a value yet.
+ */
+export function conditionValue(row: ConditionRow): unknown {
+  if (row.valueType) {
+    return undefined;
+  }
+  const read =
+    row.operator === 'in' || row.operator === 'nin'
+      ? readListValue(row)
+      : readValue(row);
+  if (!read.ok) {
+    return undefined;
+  }
+  // A list is as many values as it has, but they share a field and so a type;
+  // the first is what the dropdown reports.
+  return Array.isArray(read.value) ? read.value[0] : read.value;
+}
+
+function applyValueType(
+  read: { ok: true; value: unknown },
+  valueType: ValueType | undefined,
+  isList: boolean
+): ParsedValue {
+  if (!valueType) {
+    return read;
+  }
+  if (!isList) {
+    return castValue(read.value, valueType);
+  }
+  const values = Array.isArray(read.value) ? read.value : [read.value];
+  const cast: unknown[] = [];
+  for (const value of values) {
+    const one = castValue(value, valueType);
+    if (!one.ok) {
+      return one;
+    }
+    cast.push(one.value);
+  }
+  return { ok: true, value: cast };
+}
+
 function conditionToFilterFragment(
   row: ConditionRow
 ): { field: string; value: unknown } | { error: string } {
@@ -336,10 +449,16 @@ function conditionToFilterFragment(
     return { field: row.field, value: new RegExp(escapeRegExp(text), 'i') };
   }
 
-  const parsed =
-    row.operator === 'in' || row.operator === 'nin'
-      ? readListValue(row)
-      : readValue(row);
+  const isList = row.operator === 'in' || row.operator === 'nin';
+  const read = isList ? readListValue(row) : readValue(row);
+  if (!read.ok) {
+    return { error: `${row.field}: ${read.error}` };
+  }
+
+  // A chosen type is an instruction, so it is applied last and overrides both
+  // what the text looked like and what was dragged in. For a list it applies
+  // to each value in it, since they all sit in the same field.
+  const parsed = applyValueType(read, row.valueType, isList);
   if (!parsed.ok) {
     return { error: `${row.field}: ${parsed.error}` };
   }

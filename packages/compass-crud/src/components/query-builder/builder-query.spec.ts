@@ -8,6 +8,9 @@ import {
   parseValueText,
   parseListText,
   valueTextForOperator,
+  detectValueType,
+  takesTypedValue,
+  VALUE_TYPES,
   valueToText,
 } from './builder-query';
 
@@ -170,6 +173,118 @@ describe('builder-query', function () {
     it('leaves the text alone when the shape does not change', function () {
       expect(valueTextForOperator('London', 'eq', 'ne')).to.equal('London');
       expect(valueTextForOperator("['a']", 'in', 'nin')).to.equal("['a']");
+    });
+  });
+
+  describe('value types', function () {
+    it('offers the types a query is written against', function () {
+      expect(VALUE_TYPES).to.include.members([
+        'String',
+        'Int32',
+        'Double',
+        'Boolean',
+        'Date',
+        'ObjectId',
+        'Null',
+      ]);
+    });
+
+    it('reports the type a value already has', function () {
+      expect(detectValueType('London')).to.equal('String');
+      expect(detectValueType(true)).to.equal('Boolean');
+    });
+
+    it('has no type to choose for exists or contains', function () {
+      expect(takesTypedValue('exists')).to.equal(false);
+      expect(takesTypedValue('notExists')).to.equal(false);
+      expect(takesTypedValue('contains')).to.equal(false);
+      expect(takesTypedValue('eq')).to.equal(true);
+      expect(takesTypedValue('in')).to.equal(true);
+    });
+
+    it('reads a number as a string when String is chosen', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'eq',
+              valueText: '12',
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({ reference: '12' });
+    });
+
+    it('reads a string as a number when Int32 is chosen', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'count',
+              operator: 'eq',
+              valueText: '12',
+              valueType: 'Int32',
+            }),
+          ],
+        })
+      );
+      expect(Number(compiled.filter.count)).to.equal(12);
+    });
+
+    it('overrides the type a dragged value came with', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'eq',
+              valueText: '12',
+              value: 12,
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({ reference: '12' });
+    });
+
+    it('applies the type to every value in an in list', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'in',
+              valueText: '12, 13',
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({
+        reference: { $in: ['12', '13'] },
+      });
+    });
+
+    it('reports a value that cannot be the chosen type', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'count',
+              operator: 'eq',
+              valueText: 'not a number',
+              valueType: 'Int32',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({});
+      expect(compiled.errors).to.have.lengthOf(1);
+      expect(compiled.errors[0]).to.match(/not a Int32|not a number/);
     });
   });
 
