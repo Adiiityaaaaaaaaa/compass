@@ -19,7 +19,10 @@ describe('builder-panel-size', function () {
     });
 
     it('keeps mirrored values inside the range', function () {
-      for (const width of [280, 460, 900]) {
+      // Taken from the range itself: fixed numbers go stale the moment the
+      // panel's minimum changes, which is what they did.
+      const middle = Math.round((MIN_BUILDER_WIDTH + MAX_BUILDER_WIDTH) / 2);
+      for (const width of [MIN_BUILDER_WIDTH, middle, MAX_BUILDER_WIDTH]) {
         const mirrored = mirrorBuilderWidth(width);
         expect(mirrored).to.be.at.least(MIN_BUILDER_WIDTH);
         expect(mirrored).to.be.at.most(MAX_BUILDER_WIDTH);

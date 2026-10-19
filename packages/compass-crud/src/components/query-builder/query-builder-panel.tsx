@@ -86,22 +86,40 @@ const row = css({
   display: 'flex',
   alignItems: 'center',
   gap: spacing[100],
-  // The panel can be narrowed to about 280px, which is not enough for a field,
-  // an operator and a value side by side. Wrapping keeps every control at a
-  // readable width instead of squeezing them to slivers.
-  flexWrap: 'wrap',
 });
 
-// Selects size their menu to their trigger, so a trigger squeezed to a few
-// pixels opens a menu nobody can read. Each control gets its own basis.
-const fieldCell = css({ flex: '1 1 110px', minWidth: 96 });
-const valueCell = css({ flex: '1 1 110px', minWidth: 96 });
+/**
+ * The controls in a row, as equal columns that reflow.
+ *
+ * The panel narrows to about 280px, which is not enough to hold a field, an
+ * operator, a value and a type side by side. Wrapping them as flex items left
+ * each line a different shape, because each control had its own width. Equal
+ * columns that fit as many as there is room for line up at every width: four
+ * across when the panel is wide, two and two when it is not, one each when it
+ * is very narrow.
+ */
+const rowControls = css({
+  flex: 1,
+  minWidth: 0,
+  display: 'grid',
+  // The panel cannot be narrowed below the width that fits four of these on
+  // one line, so a condition row stays on one line. Columns still reflow if a
+  // row ever holds more than the panel can take.
+  gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+  gap: spacing[100],
+  alignItems: 'center',
+});
+
+// The grid gives every control the same width, so these only have to stop
+// their contents forcing a column wider than its share.
+const fieldCell = css({ minWidth: 0 });
+const valueCell = css({ minWidth: 0 });
 // Wide enough for the longest label in each menu, since a select's menu is as
 // wide as its trigger and a narrow one wraps every option onto several lines.
-const operatorCell = css({ flex: '0 0 136px' });
-const typeCell = css({ flex: '0 0 150px' });
-const modeCell = css({ flex: '0 0 120px' });
-const directionCell = css({ flex: '0 0 152px' });
+const operatorCell = css({ minWidth: 0 });
+const typeCell = css({ minWidth: 0 });
+const modeCell = css({ minWidth: 0 });
+const directionCell = css({ minWidth: 0 });
 
 const optionLabel = css({
   whiteSpace: 'nowrap',
@@ -222,14 +240,17 @@ const FieldDropZone: React.FunctionComponent<{
 const RowShell: React.FunctionComponent<{
   onRemove: () => void;
   removeLabel: string;
+  /** The row's tick. Kept out of the grid, which is for the controls. */
+  leading?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ onRemove, removeLabel, children }) => {
+}> = ({ onRemove, removeLabel, leading, children }) => {
   return (
     <div className={row}>
       <span className={dragHandle} aria-hidden="true">
         <Icon glyph="Drag" size="small" />
       </span>
-      {children}
+      {leading}
+      <div className={rowControls}>{children}</div>
       <IconButton
         aria-label={removeLabel}
         title={removeLabel}
@@ -380,14 +401,18 @@ export const QueryBuilderPanel: React.FunctionComponent<
                 ),
               })
             }
+            leading={
+              <Checkbox
+                aria-label={`Use condition on ${condition.field || 'field'}`}
+                checked={condition.enabled}
+                onChange={(event) =>
+                  updateCondition(condition.id, {
+                    enabled: event.target.checked,
+                  })
+                }
+              />
+            }
           >
-            <Checkbox
-              aria-label={`Use condition on ${condition.field || 'field'}`}
-              checked={condition.enabled}
-              onChange={(event) =>
-                updateCondition(condition.id, { enabled: event.target.checked })
-              }
-            />
             <div className={fieldCell}>
               <TextInput
                 aria-label="Field"
@@ -553,16 +578,18 @@ export const QueryBuilderPanel: React.FunctionComponent<
                 ),
               })
             }
+            leading={
+              <Checkbox
+                aria-label={`Use ${projection.field || 'field'} in projection`}
+                checked={projection.enabled}
+                onChange={(event) =>
+                  updateProjection(projection.id, {
+                    enabled: event.target.checked,
+                  })
+                }
+              />
+            }
           >
-            <Checkbox
-              aria-label={`Use ${projection.field || 'field'} in projection`}
-              checked={projection.enabled}
-              onChange={(event) =>
-                updateProjection(projection.id, {
-                  enabled: event.target.checked,
-                })
-              }
-            />
             <div className={fieldCell}>
               <TextInput
                 aria-label="Projection field"
@@ -648,14 +675,16 @@ export const QueryBuilderPanel: React.FunctionComponent<
             onRemove={() =>
               update({ sorts: state.sorts.filter((s) => s.id !== sortRow.id) })
             }
+            leading={
+              <Checkbox
+                aria-label={`Use ${sortRow.field || 'field'} in sort`}
+                checked={sortRow.enabled}
+                onChange={(event) =>
+                  updateSort(sortRow.id, { enabled: event.target.checked })
+                }
+              />
+            }
           >
-            <Checkbox
-              aria-label={`Use ${sortRow.field || 'field'} in sort`}
-              checked={sortRow.enabled}
-              onChange={(event) =>
-                updateSort(sortRow.id, { enabled: event.target.checked })
-              }
-            />
             <div className={fieldCell}>
               <TextInput
                 aria-label="Sort field"

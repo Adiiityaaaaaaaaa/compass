@@ -89,7 +89,10 @@ describe('QueryBuilderPanel', function () {
       expect(next.conditions[0]).to.include({
         field: 'customer.address.city',
         operator: 'eq',
-        valueText: "'London'",
+        // Plain text now: the box takes a value as written, not quoted.
+        valueText: 'London',
+        // Pinned from the document, so editing the text cannot change it.
+        valueType: 'String',
         enabled: true,
       });
     });
@@ -168,7 +171,9 @@ describe('QueryBuilderPanel', function () {
     it('adds an empty condition row to fill in by hand', function () {
       const { onChange } = renderPanel();
 
-      fireEvent.doubleClick(screen.getByTestId('query-builder-query-drop-zone'));
+      fireEvent.doubleClick(
+        screen.getByTestId('query-builder-query-drop-zone')
+      );
 
       const next = onChange.firstCall.args[0] as BuilderState;
       expect(next.conditions).to.have.lengthOf(1);

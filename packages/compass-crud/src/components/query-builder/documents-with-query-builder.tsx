@@ -26,7 +26,7 @@ import {
 } from './builder-panel-size';
 import { useTabState } from '@mongodb-js/compass-workspaces/provider';
 
-const DEFAULT_BUILDER_WIDTH = 460;
+const DEFAULT_BUILDER_WIDTH = 680;
 
 const layout = css({
   display: 'flex',
@@ -88,8 +88,8 @@ const collapsedStripDark = css({
  * The documents view with a visual query builder beside it.
  *
  * The builder is a panel on the right of the document results. Fields dragged
- * out of a document land in it, and it is collapsed until asked for, so the
- * documents view is unchanged for anyone not using it.
+ * out of a document land in it. It is open to begin with, and closing it is
+ * remembered for the tab.
  *
  * The builder owns its rows and compiles them into a query. The query bar at
  * the top of the tab is where that query is shown: editing a row writes the
@@ -114,12 +114,13 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
     'query-builder-width',
     DEFAULT_BUILDER_WIDTH
   );
-  // Collapsed until asked for: this is the documents view, and it should look
-  // and behave exactly as it always has for anyone not using the builder. Once
-  // opened in a tab it stays open for that tab.
+  // Open to begin with, since in this build the builder is the reason the
+  // documents view looks different at all and a panel nobody can see is a
+  // panel nobody uses. Closing it is remembered for the tab, so anyone who
+  // would rather have the room back only has to say so once.
   const [isCollapsed, setIsCollapsed] = useTabState(
     'query-builder-collapsed',
-    true
+    false
   );
 
   const compiled = useMemo(

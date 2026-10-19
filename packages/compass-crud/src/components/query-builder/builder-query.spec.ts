@@ -35,10 +35,16 @@ describe('builder-query', function () {
       expect(valueToText('London')).to.equal('London');
     });
 
-    it('renders BSON types in shell syntax', function () {
+    it('writes a BSON value on its own, since the type has its own dropdown', function () {
       expect(
         valueToText(new BSON.ObjectId('6a709bfd0ce4efdf334e9979'))
-      ).to.equal("ObjectId('6a709bfd0ce4efdf334e9979')");
+      ).to.equal('6a709bfd0ce4efdf334e9979');
+      expect(valueToText(new BSON.Long(2))).to.equal('2');
+      expect(valueToText(new Date('2026-01-02T03:04:05Z'))).to.equal(
+        '2026-01-02T03:04:05.000Z'
+      );
+      expect(valueToText(null)).to.equal('null');
+      expect(valueToText(true)).to.equal('true');
     });
 
     it('renders an empty string for a missing value', function () {

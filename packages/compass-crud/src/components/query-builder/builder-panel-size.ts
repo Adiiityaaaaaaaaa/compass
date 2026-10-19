@@ -1,4 +1,10 @@
-export const MIN_BUILDER_WIDTH = 280;
+/**
+ * Wide enough to hold a condition row on one line: a field, an operator, a
+ * value and a type, side by side. Narrower than this the row wrapped, and a
+ * row split across two lines is harder to read than a narrower panel is
+ * worth.
+ */
+export const MIN_BUILDER_WIDTH = 640;
 export const MAX_BUILDER_WIDTH = 900;
 
 /**

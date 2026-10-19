@@ -173,10 +173,33 @@ export function valueToText(value: unknown): string {
   if (value === undefined) {
     return '';
   }
-  // A string is shown as itself. Quoting it would be noise in a box that
-  // accepts plain text anyway, and the row remembers that it was a string.
+  // The type is shown in its own dropdown, so the value is written on its
+  // own: 2 rather than NumberLong('2'), and the date rather than ISODate(…).
+  // Saying it twice made the box wide and hard to read, and the half in the
+  // box could not be edited without rewriting the wrapper around it.
   if (typeof value === 'string') {
     return value;
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  // Only for the types the dropdown carries. Anything else keeps its wrapper,
+  // because nothing else would say what it is.
+  const detected = detectValueType(value);
+  if (
+    detected === 'Int32' ||
+    detected === 'Int64' ||
+    detected === 'Double' ||
+    detected === 'Decimal128' ||
+    detected === 'ObjectId'
+  ) {
+    return String(value);
   }
   const asQuery = toJSString({ v: value }) ?? '';
   // toJSString always produces a pretty printed document; take what is between
