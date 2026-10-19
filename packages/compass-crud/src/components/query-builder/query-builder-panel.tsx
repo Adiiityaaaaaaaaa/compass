@@ -499,6 +499,10 @@ export const QueryBuilderPanel: React.FunctionComponent<
                   valueText: valueToText(value),
                   // Kept so that a string of digits stays a string.
                   value,
+                  // Pinned to what the document said, so that editing the
+                  // text does not quietly change it: a string field stays a
+                  // string when a number is typed into it.
+                  valueType: detectValueType(value),
                   enabled: true,
                 },
               ],

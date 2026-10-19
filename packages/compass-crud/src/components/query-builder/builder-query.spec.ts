@@ -191,6 +191,24 @@ describe('builder-query', function () {
       ]);
     });
 
+    it('keeps a pinned String when a number is typed over it', function () {
+      // Dragging a string field pins String; typing 12 into it must not
+      // quietly make the query look for the number 12.
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'reference',
+              operator: 'eq',
+              valueText: '12',
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({ reference: '12' });
+    });
+
     it('reverses a C# UUID so Mongo can find it', function () {
       const compiled = compileBuilderState(
         state({
