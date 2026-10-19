@@ -54,22 +54,26 @@ export function isValuelessOperator(operator: ConditionOperator): boolean {
  * a filter written by hand.
  */
 export const VALUE_TYPES = [
-  'String',
-  'Int32',
-  'Int64',
-  'Double',
-  'Decimal128',
-  'Boolean',
-  'Date',
-  'ObjectId',
-  'UUID',
-  'Null',
+  { value: 'String', label: 'String' },
+  { value: 'Int32', label: 'Int32' },
+  { value: 'Int64', label: 'Int64' },
+  { value: 'Double', label: 'Double' },
+  { value: 'Decimal128', label: 'Decimal128' },
+  { value: 'Boolean', label: 'Boolean' },
+  { value: 'Date', label: 'Date' },
+  { value: 'ObjectId', label: 'ObjectId' },
+  { value: 'UUID', label: 'UUID' },
+  // Stored as Binary subtype 3 with the first three groups byte reversed, so
+  // a UUID copied out of a C# application will not match as it is written.
+  // Choosing this reverses it, which is what makes the query find anything.
+  { value: 'LegacyCSharpUUID', label: 'Legacy C# UUID' },
+  { value: 'Null', label: 'Null' },
 ] as const;
 
-export type ValueType = (typeof VALUE_TYPES)[number];
+export type ValueType = (typeof VALUE_TYPES)[number]['value'];
 
 export function isValueType(type: string): type is ValueType {
-  return (VALUE_TYPES as readonly string[]).includes(type);
+  return VALUE_TYPES.some((entry) => entry.value === type);
 }
 
 /** What a value already is, so the dropdown opens on the right entry. */

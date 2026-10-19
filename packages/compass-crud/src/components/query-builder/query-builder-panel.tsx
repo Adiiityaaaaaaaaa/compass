@@ -99,7 +99,7 @@ const valueCell = css({ flex: '1 1 110px', minWidth: 96 });
 // Wide enough for the longest label in each menu, since a select's menu is as
 // wide as its trigger and a narrow one wraps every option onto several lines.
 const operatorCell = css({ flex: '0 0 136px' });
-const typeCell = css({ flex: '0 0 124px' });
+const typeCell = css({ flex: '0 0 150px' });
 const modeCell = css({ flex: '0 0 120px' });
 const directionCell = css({ flex: '0 0 152px' });
 
@@ -471,8 +471,12 @@ export const QueryBuilderPanel: React.FunctionComponent<
                   }
                 >
                   {VALUE_TYPES.map((type) => (
-                    <Option key={type} value={type} className={optionLabel}>
-                      {type}
+                    <Option
+                      key={type.value}
+                      value={type.value}
+                      className={optionLabel}
+                    >
+                      {type.label}
                     </Option>
                   ))}
                 </Select>

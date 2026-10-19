@@ -178,15 +178,83 @@ describe('builder-query', function () {
 
   describe('value types', function () {
     it('offers the types a query is written against', function () {
-      expect(VALUE_TYPES).to.include.members([
+      const values = VALUE_TYPES.map((entry) => entry.value);
+      expect(values).to.include.members([
         'String',
         'Int32',
         'Double',
         'Boolean',
         'Date',
         'ObjectId',
+        'LegacyCSharpUUID',
         'Null',
       ]);
+    });
+
+    it('reverses a C# UUID so Mongo can find it', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'guid',
+              operator: 'eq',
+              valueText: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+              valueType: 'LegacyCSharpUUID',
+            }),
+          ],
+        })
+      );
+      const value = compiled.filter.guid as {
+        sub_type: number;
+        toString: (enc: string) => string;
+      };
+      // Subtype 3 is how a legacy driver stored one, and the first three
+      // groups come back reversed, which is what C# wrote.
+      expect(value.sub_type).to.equal(3);
+      expect(value.toString('hex')).to.equal(
+        '10b8a76bad9dd11180b400c04fd430c8'
+      );
+      expect(compiled.errors).to.be.empty;
+    });
+
+    it('leaves a plain UUID in the order it was written', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'guid',
+              operator: 'eq',
+              valueText: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+              valueType: 'UUID',
+            }),
+          ],
+        })
+      );
+      const value = compiled.filter.guid as {
+        sub_type: number;
+        toString: (enc: string) => string;
+      };
+      expect(value.sub_type).to.equal(4);
+      expect(value.toString('hex')).to.equal(
+        '6ba7b8109dad11d180b400c04fd430c8'
+      );
+    });
+
+    it('reports a C# UUID that is not a uuid', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'guid',
+              operator: 'eq',
+              valueText: 'not-a-uuid',
+              valueType: 'LegacyCSharpUUID',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({});
+      expect(compiled.errors).to.have.lengthOf(1);
     });
 
     it('reports the type a value already has', function () {
