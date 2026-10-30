@@ -159,6 +159,20 @@ export const EMPTY_BUILDER_STATE: BuilderState = {
   limit: '',
 };
 
+/**
+ * Whether the builder describes a query at all. Until it has a row it leaves
+ * the query bar alone.
+ */
+export function builderHasRows(state: BuilderState): boolean {
+  return (
+    state.conditions.length > 0 ||
+    state.projections.length > 0 ||
+    state.sorts.length > 0 ||
+    state.skip.trim() !== '' ||
+    state.limit.trim() !== ''
+  );
+}
+
 let idCounter = 0;
 export function nextRowId(prefix: string): string {
   idCounter += 1;
@@ -683,4 +697,53 @@ export function compiledQueryToAppliedQuery(compiled: CompiledQuery): {
     skip: compiled.skip ?? undefined,
     limit: compiled.limit ?? undefined,
   };
+}
+
+/**
+ * The parts of a query the builder writes. Collation, hint and maxTimeMS are
+ * set in the query bar alone, so changing them there leaves the builder's
+ * query as it was.
+ */
+const BUILDER_QUERY_PARTS = [
+  'filter',
+  'project',
+  'sort',
+  'skip',
+  'limit',
+] as const;
+
+export type QueryBarQuery = Partial<
+  Record<(typeof BUILDER_QUERY_PARTS)[number], unknown>
+>;
+
+/**
+ * One part of a query as shell text, for comparing the builder's query with
+ * the query bar's.
+ *
+ * The bar parses whatever is written into it, so it never holds the builder's
+ * own objects, but written back out the two read the same. An empty projection
+ * or sort comes back from the bar as null and an empty skip or limit as 0, so
+ * those count as absent.
+ */
+function queryPartText(value: unknown): string {
+  if (value === undefined || value === null || value === 0) {
+    return '';
+  }
+  return toJSString(value, 0) ?? '';
+}
+
+/**
+ * Whether the query bar still shows the builder's query. It stops doing so
+ * once the query is edited in the bar by hand, or replaced from anywhere else
+ * that writes to the bar, such as the query history.
+ */
+export function doesQueryBarShow(
+  barQuery: QueryBarQuery,
+  compiled: CompiledQuery
+): boolean {
+  const builderQuery = compiledQueryToAppliedQuery(compiled);
+  return BUILDER_QUERY_PARTS.every(
+    (part) =>
+      queryPartText(barQuery[part]) === queryPartText(builderQuery[part])
+  );
 }
