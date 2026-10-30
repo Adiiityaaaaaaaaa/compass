@@ -13,6 +13,7 @@ import { createSandboxFromDefaultPreferences } from 'compass-preferences-model';
 import { renderWithQueryBar } from '../../test/render-with-query-bar';
 
 import VirtualizedDocumentListView from './virtualized-document-list-view';
+import { keepExpandedFields } from '../utils/keep-expanded-fields';
 
 const createBigDocument = (variable: number) => ({
   _id: variable,
@@ -196,5 +197,58 @@ describe('VirtualizedDocumentListView', function () {
     // Verify that we have an editing state
     expect(() => within(documentElement).getByText('Cancel')).to.throw();
     expect(() => within(documentElement).getByText('Update')).to.throw();
+  });
+
+  it('keeps the fields that were unfolded when the query runs again', function () {
+    const user = {
+      _id: 1,
+      name: 'Alice',
+      activity: { events: ['login', 'logout'] },
+    };
+    const shown = [new HadronDocument(user)];
+    const { rerender } = renderWithQueryBar(
+      <VirtualizedDocumentListView
+        docs={shown}
+        isEditable={true}
+        __TEST_LIST_HEIGHT={600}
+      />,
+      { preferences }
+    );
+
+    function field(name: string) {
+      return document.querySelector(
+        `[data-testid="hadron-document-element"][data-field="${name}"]`
+      ) as HTMLElement;
+    }
+    userEvent.click(
+      within(field('activity')).getByRole('button', {
+        name: 'Expand field items',
+      })
+    );
+    userEvent.click(
+      within(field('events')).getByRole('button', {
+        name: 'Expand field items',
+      })
+    );
+    expect(screen.getByTitle('login')).to.be.visible;
+
+    // Running the query again fetches the same document as a new object.
+    const refetched = [new HadronDocument(user)];
+    keepExpandedFields(shown, refetched);
+    rerender(
+      <VirtualizedDocumentListView
+        docs={refetched}
+        isEditable={true}
+        __TEST_LIST_HEIGHT={600}
+      />
+    );
+
+    expect(screen.getByTitle('login')).to.be.visible;
+    expect(screen.getByTitle('logout')).to.be.visible;
+    expect(
+      within(field('events')).getByRole('button', {
+        name: 'Collapse field items',
+      })
+    ).to.exist;
   });
 });

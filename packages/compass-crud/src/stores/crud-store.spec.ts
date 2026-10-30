@@ -730,6 +730,38 @@ describe('store', function () {
       });
     });
 
+    context('when the document had fields unfolded', function () {
+      const nested = {
+        _id: 'nested',
+        name: 'Nested',
+        activity: { events: ['login'] },
+      };
+
+      beforeEach(function () {
+        return dataService.insertOne('compass-crud.test', nested);
+      });
+
+      it('keeps them unfolded in the updated document', async function () {
+        const hadronDoc = new HadronDocument(nested);
+        store.state.docs = [hadronDoc];
+        hadronDoc.get('activity')?.expand();
+        hadronDoc.getChild(['activity', 'events'])?.expand();
+        hadronDoc.get('name')?.edit('Renamed');
+
+        const listener = waitForState(store, (state) => {
+          expect(state.docs[0]).to.not.equal(hadronDoc);
+          expect(state.docs[0].get('name').currentValue).to.equal('Renamed');
+          expect(
+            state.docs[0].getChild(['activity', 'events']).expanded
+          ).to.equal(true);
+        });
+
+        void store.updateDocument(hadronDoc);
+
+        await listener;
+      });
+    });
+
     context('when a new field is added and there is no error', function () {
       const doc = { _id: 'testing', name: 'Depeche Mode' };
       const hadronDoc = new HadronDocument(doc);
@@ -1136,6 +1168,42 @@ describe('store', function () {
       const plugin = activatePlugin();
       store = plugin.store;
       deactivate = () => plugin.deactivate();
+    });
+
+    context('when the document had fields unfolded', function () {
+      const nested = {
+        _id: 'nested',
+        name: 'Nested',
+        activity: { events: ['login'] },
+      };
+
+      beforeEach(function () {
+        return dataService.insertOne('compass-crud.test', nested);
+      });
+
+      afterEach(function () {
+        return dataService.deleteMany('compass-crud.test', {});
+      });
+
+      it('keeps them unfolded in the replaced document', async function () {
+        const hadronDoc = new HadronDocument(nested);
+        store.state.docs = [hadronDoc];
+        hadronDoc.get('activity')?.expand();
+        hadronDoc.getChild(['activity', 'events'])?.expand();
+        hadronDoc.get('name')?.edit('Renamed');
+
+        const listener = waitForState(store, (state) => {
+          expect(state.docs[0]).to.not.equal(hadronDoc);
+          expect(state.docs[0].get('name').currentValue).to.equal('Renamed');
+          expect(
+            state.docs[0].getChild(['activity', 'events']).expanded
+          ).to.equal(true);
+        });
+
+        void store.replaceDocument(hadronDoc);
+
+        await listener;
+      });
     });
 
     context('when there is no error', function () {
@@ -1939,6 +2007,34 @@ describe('store', function () {
       });
 
       context('when there is no error', function () {
+        it('keeps the fields that were unfolded in the documents it fetches again', async function () {
+          await dataService.insertOne('compass-crud.test', {
+            name: 'nested',
+            activity: { events: ['login'], lastSeen: { day: 2 } },
+          });
+          const findNested = () =>
+            store.state.docs?.find(
+              (doc) => doc.get('name')?.currentValue === 'nested'
+            );
+
+          await store.refreshDocuments();
+          const before = findNested();
+          before?.get('activity')?.expand();
+          before?.getChild(['activity', 'events'])?.expand();
+
+          await store.refreshDocuments();
+          const after = findNested();
+
+          expect(after).to.exist.and.not.equal(before);
+          expect(after?.get('activity')?.expanded).to.equal(true);
+          expect(after?.getChild(['activity', 'events'])?.expanded).to.equal(
+            true
+          );
+          expect(after?.getChild(['activity', 'lastSeen'])?.expanded).to.equal(
+            false
+          );
+        });
+
         it('resets the documents to the first page', async function () {
           const listener = waitForStates(store, [
             (state) => {
