@@ -1,5 +1,6 @@
 import { parseFilter, toJSString } from 'mongodb-query-parser';
 import TypeChecker from 'hadron-type-checker';
+import { Decimal128, Long } from 'bson';
 
 /**
  * The visual query builder keeps its own rows and compiles them into a query.
@@ -261,6 +262,39 @@ export type ParsedValue =
   | { ok: false; error: string };
 
 /**
+ * A number written out in full, read so that it keeps every digit, or
+ * undefined when a double already holds it exactly.
+ *
+ * The parser reads numbers as doubles, which hold whole numbers up to 2^53
+ * and about 15 significant digits. Past that `9007199254740993` is read as
+ * its neighbour and matches a different document, and choosing a type
+ * afterwards cannot bring the lost digit back. So a whole number past 2^53
+ * is an Int64, or a Decimal128 when it is past an Int64 too, and a fraction
+ * with more digits than a double keeps is a Decimal128.
+ */
+function readExactNumber(text: string): ParsedValue | undefined {
+  if (/^-?\d+$/.test(text)) {
+    if (Number.isSafeInteger(Number(text))) {
+      return undefined;
+    }
+    const whole = BigInt(text);
+    return {
+      ok: true,
+      value:
+        BigInt.asIntN(64, whole) === whole
+          ? Long.fromBigInt(whole)
+          : Decimal128.fromString(text),
+    };
+  }
+  const fraction = /^-?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.exec(text);
+  const significant = fraction?.[1].replace('.', '').replace(/^0+/, '');
+  if (significant && significant.length > 15) {
+    return { ok: true, value: Decimal128.fromString(text) };
+  }
+  return undefined;
+}
+
+/**
  * Parses one value written in shell syntax by wrapping it in a document and
  * handing it to the same parser the query bar uses.
  */
@@ -268,6 +302,10 @@ export function parseValueText(text: string): ParsedValue {
   const trimmed = text.trim();
   if (trimmed === '') {
     return { ok: false, error: 'Value is empty' };
+  }
+  const exact = readExactNumber(trimmed);
+  if (exact) {
+    return exact;
   }
   try {
     const parsed = parseFilter(`{"__value": ${trimmed}}`) as Record<
@@ -360,8 +398,13 @@ export function parseListText(text: string): ParsedValue {
     return { ok: false, error: 'Value is empty' };
   }
 
-  // An explicit list is read as one, so `['a', 'b']` and `[1, 2]` keep working.
-  if (trimmed.startsWith('[')) {
+  // A list of bare values, like `[1, 2]`, is read without its brackets, value
+  // by value, so that a long number in it keeps its digits.
+  const bare = /^\[([^[\]{}()'"/]*)\]$/.exec(trimmed)?.[1];
+  const bareList = bare?.trim() ? bare : undefined;
+
+  // Any other explicit list is read as one, so `['a', 'b']` keeps working.
+  if (trimmed.startsWith('[') && !bareList) {
     const parsed = parseValueText(trimmed);
     if (parsed.ok && Array.isArray(parsed.value)) {
       return parsed;
@@ -370,7 +413,7 @@ export function parseListText(text: string): ParsedValue {
 
   // Otherwise the commas separate the values, and each is read the same way a
   // single value is: `a, b` is two strings, `1, 2` is two numbers.
-  const parts = trimmed
+  const parts = (bareList ?? trimmed)
     .split(',')
     .map((part) => part.trim())
     .filter((part) => part !== '');

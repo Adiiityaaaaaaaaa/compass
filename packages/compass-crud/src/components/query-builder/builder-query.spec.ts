@@ -12,6 +12,7 @@ import {
   parseListText,
   valueTextForOperator,
   detectValueType,
+  conditionValue,
   takesTypedValue,
   VALUE_TYPES,
   valueToText,
@@ -56,6 +57,48 @@ describe('builder-query', function () {
   });
 
   describe('parseValueText', function () {
+    function read(text: string) {
+      const parsed = parseValueText(text);
+      if (!parsed.ok) {
+        throw new Error(parsed.error);
+      }
+      return parsed.value;
+    }
+
+    it('reads a whole number past 2^53 as an Int64, every digit kept', function () {
+      const value = read('9007199254740993');
+      expect(value).to.be.instanceOf(BSON.Long);
+      expect(String(value)).to.equal('9007199254740993');
+      expect(String(read('-9007199254740993'))).to.equal('-9007199254740993');
+    });
+
+    it('reads a whole number past an Int64 as a Decimal128', function () {
+      const value = read('99999999999999999999');
+      expect(value).to.be.instanceOf(BSON.Decimal128);
+      expect(String(value)).to.equal('99999999999999999999');
+    });
+
+    it('reads a fraction with more digits than a double holds as a Decimal128', function () {
+      const value = read('12345678901234567890.123456789');
+      expect(value).to.be.instanceOf(BSON.Decimal128);
+      expect(String(value)).to.equal('12345678901234567890.123456789');
+    });
+
+    it('leaves numbers a double holds exactly as numbers', function () {
+      expect(read('25')).to.equal(25);
+      expect(read('-2.5')).to.equal(-2.5);
+      expect(read('9007199254740991')).to.equal(9007199254740991);
+      expect(read('0.123456789012345')).to.equal(0.123456789012345);
+    });
+
+    it('shows an Int64 in the type dropdown for a long whole number', function () {
+      expect(
+        detectValueType(
+          conditionValue(condition({ valueText: '9007199254740993' }))
+        )
+      ).to.equal('Int64');
+    });
+
     it('reads a value back out of shell syntax', function () {
       expect(parseValueText("'London'")).to.deep.equal({
         ok: true,
@@ -110,6 +153,32 @@ describe('builder-query', function () {
   });
 
   describe('parseListText', function () {
+    it('keeps every digit of the numbers in a list', function () {
+      const parsed = parseListText('[9007199254740993, 1]');
+      expect(parsed.ok).to.equal(true);
+      const values = (parsed as { value: unknown[] }).value;
+      expect(String(values[0])).to.equal('9007199254740993');
+      expect(values[1]).to.equal(1);
+    });
+
+    it('reads words in brackets as words', function () {
+      expect(parseListText('[shipped, pending]')).to.deep.equal({
+        ok: true,
+        value: ['shipped', 'pending'],
+      });
+    });
+
+    it('still reads a list with quotes in it as one', function () {
+      expect(parseListText("['a, b', 'c']")).to.deep.equal({
+        ok: true,
+        value: ['a, b', 'c'],
+      });
+    });
+
+    it('still reads an empty list as an empty list', function () {
+      expect(parseListText('[]')).to.deep.equal({ ok: true, value: [] });
+    });
+
     it('splits a bare list on commas', function () {
       expect(parseListText('shipped, pending')).to.deep.equal({
         ok: true,
