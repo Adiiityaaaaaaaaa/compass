@@ -23,6 +23,8 @@
   --compass-ag-grid-added-cell-border: @palette__green--light-2;
   --compass-ag-grid-invalid-cell-background: @palette__red--light-2;
   --compass-ag-grid-invalid-cell-border: @palette__red--base;
+  --compass-ag-grid-selected-cell-background: fade(@palette__blue--base, 15%);
+  --compass-ag-grid-drag-grip: @palette__gray--dark-1;
 }
 
 .document-table-view-container {
@@ -49,6 +51,11 @@
     --compass-ag-grid-added-cell-border: @palette__green--dark-2;
     --compass-ag-grid-invalid-cell-background: @palette__red--dark-2;
     --compass-ag-grid-invalid-cell-border: @palette__red--base;
+    --compass-ag-grid-selected-cell-background: fade(
+      @palette__blue--light-1,
+      25%
+    );
+    --compass-ag-grid-drag-grip: @palette__gray--light-1;
   }
 
   width: 100%;
@@ -158,7 +165,31 @@
       border-bottom: 0.5px solid var(--compass-ag-grid-border);
       position: absolute;
 
+      // Cells are selected and copied as a block instead. Selecting their
+      // text would run on across every cell in between, row by row. The
+      // app's stylesheet makes every element selectable, so setting this on
+      // the cell alone isn't inherited by what's in it.
+      &,
+      & *:not(input, textarea) {
+        user-select: none;
+      }
+
       outline: 0;
+
+      &:hover .table-view-cell-drag-grip {
+        opacity: 1;
+      }
+
+      // An overlay rather than a background, so that it shows over the
+      // backgrounds of empty, edited and hovered cells alike.
+      &.table-view-cell-selected::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-color: var(--compass-ag-grid-selected-cell-background);
+        pointer-events: none;
+      }
+
       &-focus {
         overflow: visible !important;
       }
@@ -251,6 +282,20 @@
       &-left {
         right: 20px;
       }
+    }
+
+    &-drag-grip {
+      position: absolute;
+      z-index: 100;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      align-items: center;
+      color: var(--compass-ag-grid-drag-grip);
+      background: var(--compass-ag-grid-background-hover);
+      cursor: grab;
+      opacity: 0;
     }
 
     .editable-element {

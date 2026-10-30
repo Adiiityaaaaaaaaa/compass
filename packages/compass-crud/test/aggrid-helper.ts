@@ -89,6 +89,8 @@ export const getContext = function (path) {
     addFooter: sinon.spy(),
     handleClone: sinon.spy(),
     handleCopy: sinon.spy(),
+    startSelection: sinon.spy(),
+    selectColumn: sinon.spy(),
   };
 };
 

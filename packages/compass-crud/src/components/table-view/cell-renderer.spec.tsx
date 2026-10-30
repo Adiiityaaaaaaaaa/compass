@@ -1,11 +1,14 @@
 import React from 'react';
 import { expect } from 'chai';
+import sinon from 'sinon';
 import {
   render,
   screen,
   cleanup,
+  fireEvent,
   userEvent,
 } from '@mongodb-js/testing-library-compass';
+import { DocumentList } from '@mongodb-js/compass-components';
 
 import {
   getNode,
@@ -573,6 +576,72 @@ describe('<CellRenderer />', function () {
         userEvent.click(cell!);
         notCalledExcept(actions, []);
         notCalledExcept(api, []);
+      });
+    });
+
+    describe('drag grip', function () {
+      function fakeDataTransfer() {
+        const data = new Map<string, string>();
+        return {
+          effectAllowed: 'none',
+          setData: (type: string, value: string) => data.set(type, value),
+          getData: (type: string) => data.get(type) ?? '',
+          setDragImage: sinon.spy(),
+        };
+      }
+
+      function renderCell(doc: Record<string, unknown>) {
+        const api = getApi();
+        const actions = getActions();
+        const rowNode = getNode(doc);
+        return render(
+          <CellRenderer
+            api={api as any}
+            column={getColumn('field1', {}) as any}
+            node={rowNode}
+            value={rowNode.data.hadronDocument.get('field1')}
+            drillDown={actions.drillDown}
+            elementAdded={actions.elementAdded}
+            elementRemoved={actions.elementRemoved}
+            elementTypeChanged={actions.elementTypeChanged}
+            parentType=""
+            timezone="UTC"
+            context={getContext([])}
+          />
+        );
+      }
+
+      it('drags the value by its grip, showing the cell as it goes', function () {
+        const { container } = renderCell({ field1: 'value' });
+        const dataTransfer = fakeDataTransfer();
+
+        fireEvent.dragStart(screen.getByTestId('table-view-cell-drag-grip'), {
+          dataTransfer,
+        });
+
+        expect(
+          DocumentList.getDraggedDocumentField(
+            dataTransfer as unknown as DataTransfer
+          )
+        ).to.deep.equal({ field: 'field1', value: 'value' });
+        expect(dataTransfer.setDragImage).to.have.been.calledWith(
+          container.querySelector('.table-view-cell')
+        );
+      });
+
+      it('leaves the cell itself undraggable, so dragging across cells selects them', function () {
+        const { container } = renderCell({ field1: 'value' });
+
+        expect(
+          container.querySelector('.table-view-cell')?.getAttribute('draggable')
+        ).to.equal(null);
+      });
+
+      it('has no grip on a missing field', function () {
+        renderCell({});
+
+        expect(screen.getByText('No field')).to.exist;
+        expect(screen.queryByTestId('table-view-cell-drag-grip')).to.not.exist;
       });
     });
 

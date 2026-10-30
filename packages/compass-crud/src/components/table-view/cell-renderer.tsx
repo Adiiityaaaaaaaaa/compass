@@ -71,6 +71,8 @@ const DELETED = 'is-deleted';
  */
 const BUTTON_CLASS = 'table-view-cell-circle-button';
 
+const DRAG_GRIP_CLASS = 'table-view-cell-drag-grip';
+
 const cellContainerStyle = css({
   display: 'flex',
   alignItems: 'center',
@@ -105,6 +107,7 @@ class CellRenderer
   isEmpty: boolean;
   isDeleted: boolean;
   editable: boolean;
+  cellRef = React.createRef<HTMLDivElement>();
 
   constructor(props: CellRendererProps) {
     super(props);
@@ -177,12 +180,24 @@ class CellRenderer
     this.forceUpdate();
   };
 
-  // Dragging a cell's value puts "field: value" on the drag data, so it can
+  // Dragging a cell's grip puts "field: value" on the drag data, so it can
   // be dropped into an aggregation stage or any editor outside Compass, the
-  // same way dragging a field works in the list view.
-  handleDragStart = (evt: React.DragEvent<HTMLDivElement>) => {
+  // same way dragging a field works in the list view. Dragging across the
+  // cells themselves selects them instead.
+  handleDragStart = (evt: React.DragEvent<HTMLSpanElement>) => {
     evt.stopPropagation();
     evt.dataTransfer.effectAllowed = 'copy';
+    // The grip alone would be the drag image, which doesn't show what is
+    // being dragged.
+    const cell = this.cellRef.current;
+    if (cell) {
+      const { left, top } = cell.getBoundingClientRect();
+      evt.dataTransfer.setDragImage(
+        cell,
+        evt.clientX - left,
+        evt.clientY - top
+      );
+    }
     evt.dataTransfer.setData(
       'text/plain',
       `${this.element.currentKey}: ${this.element.toShellSyntax()}`
@@ -222,6 +237,13 @@ class CellRenderer
     event.stopPropagation();
     this.props.drillDown(this.props.node.data.hadronDocument, this.element);
   }
+
+  handleMouseDown = (event: React.MouseEvent) => {
+    const { node, column, context } = this.props;
+    if (column) {
+      context.startSelection(node, column.getColId(), event);
+    }
+  };
 
   handleClicked() {
     const { node, column, api } = this.props;
@@ -319,6 +341,20 @@ class CellRenderer
     );
   }
 
+  renderDragGrip() {
+    return (
+      <span
+        className={DRAG_GRIP_CLASS}
+        draggable
+        onDragStart={this.handleDragStart}
+        title="Drag this value into a query"
+        data-testid="table-view-cell-drag-grip"
+      >
+        <Icon glyph="Drag" size="small" />
+      </span>
+    );
+  }
+
   renderExpand(canExpand: boolean) {
     if (!canExpand) {
       return null;
@@ -387,12 +423,13 @@ class CellRenderer
         >
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus*/}
           <div
+            ref={this.cellRef}
             className={className}
+            onMouseDown={this.handleMouseDown}
             onClick={this.handleClicked.bind(this)}
             role="button"
-            draggable={draggable}
-            onDragStart={draggable ? this.handleDragStart : undefined}
           >
+            {draggable && this.renderDragGrip()}
             {this.renderUndo(canUndo, canExpand)}
             {this.renderExpand(canExpand)}
             {element}
