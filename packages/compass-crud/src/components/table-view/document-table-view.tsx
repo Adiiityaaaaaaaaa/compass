@@ -13,6 +13,13 @@ import RowActionsRenderer from './row-actions-renderer';
 import HeaderComponent from './header-cell-renderer';
 import type { DocumentTableRowNode } from './cell-editor';
 import CellEditor from './cell-editor';
+import {
+  SELECTED_CELL_CLASS,
+  cellsToText,
+  isCellInSelection,
+  selectedCells,
+} from './cell-selection';
+import type { CellSelection, SelectedCells } from './cell-selection';
 
 import './document-table-view.less';
 import './ag-grid-dist.css';
@@ -29,6 +36,9 @@ import type {
   TableHeaderType,
 } from '../../stores/grid-store';
 import type {
+  CellClassParams,
+  CellKeyDownEvent,
+  CellMouseOverEvent,
   ColDef,
   ColumnApi,
   GridApi,
@@ -87,7 +97,31 @@ export type GridContext = {
   ) => void;
   handleClone: (data: { hadronDocument: Document }) => void;
   openExpandedEditor: (data: { hadronDocument: Document }) => void;
+  startSelection: (
+    node: DocumentTableRowNode,
+    colId: string,
+    event: React.MouseEvent
+  ) => void;
+  selectColumn: (colId: string, extend: boolean) => void;
 };
+
+// Text being edited in a cell, or picked out of a message under a row, is
+// copied as usual rather than replaced by the selected cells.
+function isCopyingOtherText(event: React.ClipboardEvent<HTMLElement>) {
+  if (
+    (event.target as HTMLElement).closest(
+      'input, textarea, [contenteditable="true"]'
+    )
+  ) {
+    return true;
+  }
+  const textSelection = window.getSelection();
+  return (
+    !!textSelection &&
+    !textSelection.isCollapsed &&
+    event.currentTarget.contains(textSelection.anchorNode)
+  );
+}
 
 /**
  * Represents the table view of the documents tab.
@@ -100,6 +134,11 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
   unsubscribeGridStore?: Function;
   gridApi?: GridApi;
   columnApi?: ColumnApi;
+  // Kept outside React state: the grid is created once, and shows the
+  // selection through cellClassRules when its cells are refreshed.
+  selection: CellSelection | null = null;
+  selected: SelectedCells | null = null;
+  selectionDrag: 'cells' | 'rows' | null = null;
 
   constructor(props: DocumentTableViewProps) {
     super(props);
@@ -110,6 +149,8 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       handleRemove: this.handleRemove,
       handleClone: this.handleClone,
       openExpandedEditor: this.handleOpenExpandedEditor,
+      startSelection: this.startSelection,
+      selectColumn: this.selectColumn,
       path: [],
     };
     const sharedGridProperties: AgGridReactProps = {
@@ -154,6 +195,8 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
         return String(data.hadronDocument.getStringId()) + fid;
       },
       onColumnResized: this.onColumnResized.bind(this),
+      onCellMouseOver: this.onCellMouseOver,
+      onCellKeyDown: this.onCellKeyDown,
     };
 
     this.collection = mongodbns(props.ns).collection;
@@ -171,10 +214,19 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
 
   componentWillUnmount() {
     this.unsubscribeGridStore?.();
+    this.endSelectionDrag();
     this.gridApi?.destroy?.();
   }
 
   componentDidUpdate(prevProps: DocumentTableViewProps) {
+    if (
+      this.selection &&
+      (this.props.docs !== prevProps.docs ||
+        this.props.table.path !== prevProps.table.path)
+    ) {
+      this.setSelection(null);
+    }
+
     this.handleBreadcrumbChange();
 
     // @note: Durran: Since all the values are getting passed down as props now
@@ -233,6 +285,141 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       this.props.onColumnWidthChange(currentColumnWidths);
     }
   }
+
+  selectableColumnIds(): string[] {
+    return (this.columnApi?.getAllDisplayedColumns() ?? [])
+      .map((column) => column.getColId())
+      .filter((colId) => colId !== '$rowNumber' && colId !== '$rowActions');
+  }
+
+  setSelection(selection: CellSelection | null) {
+    this.selection = selection;
+    this.selected =
+      selection && selectedCells(selection, this.selectableColumnIds());
+    // Re-applies cellClassRules; a cell whose value hasn't changed isn't
+    // rendered again.
+    this.gridApi?.refreshCells();
+  }
+
+  isCellSelected = ({ rowIndex, column }: CellClassParams) =>
+    isCellInSelection(this.selected, rowIndex, column.getColId());
+
+  startSelectionDrag(drag: 'cells' | 'rows', selection: CellSelection) {
+    this.selectionDrag = drag;
+    this.setSelection(selection);
+    document.addEventListener('mouseup', this.endSelectionDrag);
+  }
+
+  endSelectionDrag = () => {
+    this.selectionDrag = null;
+    document.removeEventListener('mouseup', this.endSelectionDrag);
+  };
+
+  // Called by the cell renderers rather than taken from ag-grid's
+  // onCellMouseDown: on a device with a touch screen ag-grid listens for
+  // touchstart in place of mousedown, so a mouse click would never reach it.
+  startSelection = (
+    node: DocumentTableRowNode,
+    colId: string,
+    event: React.MouseEvent
+  ) => {
+    const { rowIndex } = node;
+    const columnIds = this.selectableColumnIds();
+    if (
+      event.button !== 0 ||
+      rowIndex === null ||
+      columnIds.length === 0 ||
+      // Clicking a cell of a row being edited edits it.
+      node.data.state === 'editing' ||
+      // The buttons and the drag grip in a cell do what they do.
+      (event.target as HTMLElement).closest('button, [draggable="true"]')
+    ) {
+      return;
+    }
+
+    const previousAnchor = event.shiftKey ? this.selection?.anchor : undefined;
+    if (colId === '$rowNumber') {
+      this.startSelectionDrag('rows', {
+        anchor: {
+          rowIndex: previousAnchor?.rowIndex ?? rowIndex,
+          colId: columnIds[0],
+        },
+        focus: { rowIndex, colId: columnIds[columnIds.length - 1] },
+      });
+    } else {
+      this.startSelectionDrag('cells', {
+        anchor: previousAnchor ?? { rowIndex, colId },
+        focus: { rowIndex, colId },
+      });
+    }
+  };
+
+  onCellMouseOver = ({ column, rowIndex, event }: CellMouseOverEvent) => {
+    const selection = this.selection;
+    if (!this.selectionDrag || !selection || rowIndex === null) {
+      return;
+    }
+    // The button may have been let go outside the window, where the mouseup
+    // doesn't reach the document.
+    if (((event as MouseEvent | null | undefined)?.buttons ?? 0) % 2 === 0) {
+      this.endSelectionDrag();
+      return;
+    }
+
+    const colId = column.getColId();
+    const keepsColumn =
+      this.selectionDrag === 'rows' ||
+      colId === '$rowNumber' ||
+      colId === '$rowActions';
+    const focus = {
+      rowIndex,
+      colId: keepsColumn ? selection.focus.colId : colId,
+    };
+    if (
+      focus.rowIndex !== selection.focus.rowIndex ||
+      focus.colId !== selection.focus.colId
+    ) {
+      this.setSelection({ anchor: selection.anchor, focus });
+    }
+  };
+
+  onCellKeyDown = ({ event }: CellKeyDownEvent) => {
+    if ((event as KeyboardEvent | null | undefined)?.key === 'Escape') {
+      this.setSelection(null);
+    }
+  };
+
+  selectColumn = (colId: string, extend: boolean) => {
+    const lastRow = (this.gridApi?.getDisplayedRowCount() ?? 0) - 1;
+    if (lastRow < 0) {
+      return;
+    }
+    const anchorColId = extend ? this.selection?.anchor.colId ?? colId : colId;
+    this.setSelection({
+      anchor: { rowIndex: 0, colId: anchorColId },
+      focus: { rowIndex: lastRow, colId },
+    });
+  };
+
+  handleCopy = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const { selected, gridApi } = this;
+    if (!selected || !gridApi || isCopyingOtherText(event)) {
+      return;
+    }
+    const rows: (Element | undefined)[][] = [];
+    for (let row = selected.firstRow; row <= selected.lastRow; row++) {
+      const node = gridApi.getDisplayedRowAtIndex(row);
+      if (node && !node.data.isFooter) {
+        rows.push(
+          selected.colIds.map(
+            (colId) => gridApi.getValue(colId, node) as Element | undefined
+          )
+        );
+      }
+    }
+    event.clipboardData.setData('text/plain', cellsToText(rows));
+    event.preventDefault();
+  };
 
   /**
    * Add a row to the table that represents the update/cancel footer for the
@@ -740,6 +927,7 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
       headerName: '_id',
       colId: '$_id',
       cellClass: 'ag-cell-subtable-objectid',
+      cellClassRules: { [SELECTED_CELL_CLASS]: this.isCellSelected },
       valueGetter: function (params: ValueGetterParams) {
         return params.data.hadronDocument.get('_id');
       },
@@ -788,6 +976,7 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
     return {
       headerName: String(path[path.length - 1]),
       colId: String(path[path.length - 1]),
+      cellClassRules: { [SELECTED_CELL_CLASS]: this.isCellSelected },
       valueGetter: function (params) {
         const child = params.data.hadronDocument.getChild(path);
         if (path.length <= 1) {
@@ -1046,6 +1235,7 @@ export class DocumentTableView extends React.Component<DocumentTableViewProps> {
           this.props.darkMode && 'document-table-view-container-darkmode'
         )}
         data-testid="document-list"
+        onCopy={this.handleCopy}
       >
         <div className={cx('ag-parent', this.props.className)}>
           <BreadcrumbComponent

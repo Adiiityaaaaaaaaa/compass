@@ -1,4 +1,6 @@
 import React from 'react';
+import type { DocumentTableRowNode } from './cell-editor';
+import type { GridContext } from './document-table-view';
 
 /**
  Custom cell renderer for the row numbers. Required because we can't rely on
@@ -7,10 +9,24 @@ import React from 'react';
  */
 function RowNumberRenderer({
   value,
+  node,
+  context,
 }: {
   value: JSX.Element | string | number;
+  node: DocumentTableRowNode;
+  context: GridContext;
 }) {
-  return <div className="table-view-cell-row-number">{value}</div>;
+  return (
+    // ag-grid keeps keyboard focus on the cell around this, so only the mouse
+    // reaches it.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="table-view-cell-row-number"
+      onMouseDown={(event) => context.startSelection(node, '$rowNumber', event)}
+    >
+      {value}
+    </div>
+  );
 }
 
 RowNumberRenderer.displayName = 'RowNumberRenderer';
