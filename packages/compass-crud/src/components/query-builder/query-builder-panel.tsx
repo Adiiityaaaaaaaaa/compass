@@ -270,7 +270,7 @@ const RowShell: React.FunctionComponent<{
  * that is tedious to do by hand, and a section with nothing selected
  * contributes nothing anyway, so the two readings end in the same query.
  */
-const SectionShell: React.FunctionComponent<{
+export const SectionShell: React.FunctionComponent<{
   title: string;
   /** Omitted by a section that has no rows to select. */
   rowsSelected?: { selected: number; total: number };
@@ -315,11 +315,13 @@ export type QueryBuilderPanelProps = {
   onChange: (state: BuilderState) => void;
   onRun: () => void;
   errors: string[];
+  /** Shown above the sections, spaced as one of them. */
+  header?: React.ReactNode;
 };
 
 export const QueryBuilderPanel: React.FunctionComponent<
   QueryBuilderPanelProps
-> = ({ state, onChange, onRun, errors }) => {
+> = ({ state, onChange, onRun, errors, header }) => {
   const update = useCallback(
     (patch: Partial<BuilderState>) => onChange({ ...state, ...patch }),
     [onChange, state]
@@ -346,6 +348,7 @@ export const QueryBuilderPanel: React.FunctionComponent<
 
   return (
     <div className={panel} data-testid="query-builder-panel">
+      {header}
       <SectionShell
         title="Query"
         rowsSelected={{

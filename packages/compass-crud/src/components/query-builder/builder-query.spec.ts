@@ -6,6 +6,8 @@ import {
   compileBuilderState,
   compiledQueryToAppliedQuery,
   doesQueryBarShow,
+  nextRowId,
+  toBuilderState,
   parseValueText,
   parseListText,
   valueTextForOperator,
@@ -859,6 +861,48 @@ describe('builder-query', function () {
       expect(query.sort).to.deep.equal({ timestamp: -1 });
       expect(query.skip).to.equal(5);
       expect(query.limit).to.equal(20);
+    });
+  });
+
+  describe('toBuilderState', function () {
+    it('reads saved rows back as they were saved', function () {
+      const saved = state({
+        match: 'or',
+        conditions: [condition({ field: 'status' })],
+        sorts: [{ id: 's1', field: 'age', direction: 'desc', enabled: true }],
+        limit: '10',
+      });
+
+      const read = toBuilderState(saved);
+
+      expect(read.match).to.equal('or');
+      expect(read.limit).to.equal('10');
+      expect(read.conditions[0]).to.include({ field: 'status' });
+      expect(read.sorts[0]).to.include({ field: 'age', direction: 'desc' });
+    });
+
+    it('gives no two rows the same id, including rows added later', function () {
+      // Saved in an earlier session, whose counter handed out the same ids
+      // this one is about to.
+      const saved = state({
+        conditions: [
+          condition({ id: 'condition-1' }),
+          condition({ id: 'condition-1', field: 'total' }),
+        ],
+      });
+
+      const read = toBuilderState(saved);
+      const added = nextRowId('condition');
+
+      const ids = [...read.conditions.map((row) => row.id), added];
+      expect(new Set(ids).size).to.equal(ids.length);
+    });
+
+    it('reads what it cannot make sense of as an empty builder', function () {
+      expect(toBuilderState(undefined)).to.deep.equal(EMPTY_BUILDER_STATE);
+      expect(
+        toBuilderState({ match: 'xor', conditions: 'none', skip: 5 })
+      ).to.deep.equal(EMPTY_BUILDER_STATE);
     });
   });
 

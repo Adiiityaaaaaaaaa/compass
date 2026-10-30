@@ -3,6 +3,7 @@ export {
   createWebRecentQueryStorage,
   createWebFavoriteQueryStorage,
   createWebPipelineStorage,
+  createWebBuilderQueryStorage,
 } from './storage-factories';
 
 export type { WebStorageOptions } from './storage-factories';

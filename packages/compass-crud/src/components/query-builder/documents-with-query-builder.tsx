@@ -14,6 +14,8 @@ import DocumentList from '../document-list';
 import type { DocumentListProps } from '../document-list';
 import { QueryBuilderPanel } from './query-builder-panel';
 import { MainQueryChangedGuard } from './main-query-changed-guard';
+import { SavedQueriesBar } from './saved-queries-bar';
+import type { BuilderQueriesState } from '../../stores/crud-store';
 import type { BuilderState } from './builder-query';
 import {
   EMPTY_BUILDER_STATE,
@@ -102,20 +104,16 @@ const collapsedStripDark = css({
  * It only goes that way. Editing the query bar by hand leaves the rows as they
  * were, and the builder is greyed out until it is either written back over
  * the bar or cleared.
+ *
+ * The rows and the saved queries live in the store, which is what fills the
+ * rows in with the default query when the collection opens.
  */
 export const DocumentsWithQueryBuilder: React.FunctionComponent<
-  DocumentListProps
+  DocumentListProps & BuilderQueriesState
 > = (props) => {
   const darkMode = useDarkMode();
-  const { store } = props;
-  // Per workspace tab, and surviving the unmount that switching tabs causes.
-  // Two tabs on the same collection are two different queries, so this is
-  // scoped to the tab rather than to the collection.
-  // Defaults to EMPTY_BUILDER_STATE if useTabState ever hands back `undefined`
-  // (e.g. a tab-state key that was previously set to `undefined` sticks,
-  // since useTabState only backfills a missing key, not an undefined one).
-  const [builderState = EMPTY_BUILDER_STATE, setBuilderState] =
-    useTabState<BuilderState>('query-builder-rows', EMPTY_BUILDER_STATE);
+  const { store, builderState, savedBuilderQueries, selectedBuilderQueryId } =
+    props;
   const [builderWidth, setBuilderWidth] = useTabState(
     'query-builder-width',
     DEFAULT_BUILDER_WIDTH
@@ -134,25 +132,9 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
     [builderState]
   );
 
-  // Keeps the query bar showing what the rows describe, without running it.
-  //
-  // Written as the rows change rather than from an effect. An effect left a
-  // render in which the rows were new and the bar was not, which read as the
-  // main query having changed, and it wrote again whenever the panel mounted,
-  // replacing a query typed into the bar while the tab was in the background.
-  //
-  // An empty builder leaves the bar alone: removing the last row stops the
-  // builder describing a query, rather than describing an empty one.
   const onBuilderChange = useCallback(
-    (nextState: BuilderState) => {
-      setBuilderState(nextState);
-      if (builderHasRows(nextState)) {
-        store.queryBar.setQuery(
-          compiledQueryToAppliedQuery(compileBuilderState(nextState))
-        );
-      }
-    },
-    [setBuilderState, store]
+    (nextState: BuilderState) => store.setBuilderState(nextState),
+    [store]
   );
 
   const onProceed = useCallback(() => {
@@ -160,8 +142,25 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
   }, [compiled, store]);
 
   const onClearBuilder = useCallback(() => {
-    setBuilderState(EMPTY_BUILDER_STATE);
-  }, [setBuilderState]);
+    store.setBuilderState(EMPTY_BUILDER_STATE);
+  }, [store]);
+
+  const onOpenSavedQuery = useCallback(
+    (id: string) => store.openSavedBuilderQuery(id),
+    [store]
+  );
+  const onSaveQuery = useCallback(
+    (name: string) => void store.saveBuilderQuery(name),
+    [store]
+  );
+  const onToggleDefaultQuery = useCallback(
+    (id: string) => void store.toggleDefaultBuilderQuery(id),
+    [store]
+  );
+  const onDeleteSavedQuery = useCallback(
+    (id: string) => void store.deleteSavedBuilderQuery(id),
+    [store]
+  );
 
   const onRun = useCallback(() => {
     // Every property is sent on every run, using undefined for the ones the
@@ -237,6 +236,19 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
                 onChange={onBuilderChange}
                 onRun={onRun}
                 errors={compiled.errors}
+                header={
+                  savedBuilderQueries && (
+                    <SavedQueriesBar
+                      savedQueries={savedBuilderQueries}
+                      selectedId={selectedBuilderQueryId}
+                      canSave={builderHasRows(builderState)}
+                      onOpen={onOpenSavedQuery}
+                      onSave={onSaveQuery}
+                      onToggleDefault={onToggleDefaultQuery}
+                      onDelete={onDeleteSavedQuery}
+                    />
+                  )
+                }
               />
             </div>
           </MainQueryChangedGuard>

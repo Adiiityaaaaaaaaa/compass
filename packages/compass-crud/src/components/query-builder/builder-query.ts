@@ -188,6 +188,31 @@ export function nextRowId(prefix: string): string {
   return `${prefix}-${idCounter}`;
 }
 
+function savedRows<T extends { id: string }>(rows: unknown, prefix: string) {
+  return Array.isArray(rows)
+    ? (rows as T[]).map((row) => ({ ...row, id: nextRowId(prefix) }))
+    : [];
+}
+
+/**
+ * The builder state a saved query holds, ready to put back in the builder.
+ *
+ * Every row gets a new id. The ids come from a counter that starts again each
+ * time Compass does, so the ones a query was saved with can already belong to
+ * rows on screen, and two rows sharing an id are edited as one.
+ */
+export function toBuilderState(saved: unknown): BuilderState {
+  const state = (saved ?? {}) as Partial<Record<keyof BuilderState, unknown>>;
+  return {
+    match: state.match === 'or' ? 'or' : 'and',
+    conditions: savedRows<ConditionRow>(state.conditions, 'condition'),
+    projections: savedRows<ProjectionRow>(state.projections, 'projection'),
+    sorts: savedRows<SortRow>(state.sorts, 'sort'),
+    skip: typeof state.skip === 'string' ? state.skip : '',
+    limit: typeof state.limit === 'string' ? state.limit : '',
+  };
+}
+
 /**
  * Renders a value the way the query bar would, so that a value dropped in from
  * a document reads the same as one typed by hand.

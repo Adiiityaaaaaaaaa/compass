@@ -379,6 +379,17 @@ describe('store', function () {
           free_storage_size: 10,
           storage_size: 20,
         },
+        builderState: {
+          match: 'and',
+          conditions: [],
+          projections: [],
+          sorts: [],
+          skip: '',
+          limit: '',
+        },
+        // No storage was given, so there is nowhere to save builder queries.
+        savedBuilderQueries: null,
+        selectedBuilderQueryId: null,
       });
     });
   });

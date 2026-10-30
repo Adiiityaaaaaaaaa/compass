@@ -3,6 +3,7 @@ export {
   createElectronRecentQueryStorage,
   createElectronFavoriteQueryStorage,
   createElectronPipelineStorage,
+  createElectronBuilderQueryStorage,
 } from './storage-factories';
 
 export type { ElectronStorageOptions } from './storage-factories';
@@ -12,8 +13,13 @@ export type {
   RecentQueryStorageInterface,
   FavoriteQueryStorageInterface,
   PipelineStorageInterface,
+  BuilderQueryStorageInterface,
 } from './storage-interfaces';
 
 // Re-export schemas
-export type { RecentQuery, FavoriteQuery } from './query-storage-schema';
+export type {
+  RecentQuery,
+  FavoriteQuery,
+  BuilderQuery,
+} from './query-storage-schema';
 export type { SavedPipeline } from './pipeline-storage-schema';

@@ -13,14 +13,17 @@ import {
   createElectronRecentQueryStorage,
   createElectronFavoriteQueryStorage,
   createElectronPipelineStorage,
+  createElectronBuilderQueryStorage,
 } from '@mongodb-js/my-queries-storage/electron';
 import {
   PipelineStorageProvider,
   FavoriteQueryStorageProvider,
   RecentQueryStorageProvider,
+  BuilderQueryStorageProvider,
   type FavoriteQueryStorageAccess,
   type RecentQueryStorageAccess,
   type PipelineStorageAccess,
+  type BuilderQueryStorageAccess,
 } from '@mongodb-js/my-queries-storage/provider';
 import { createElectronDeletedDocumentsStorage } from '@mongodb-js/my-deleted-documents-storage/electron';
 import {
@@ -114,17 +117,24 @@ export const WithStorageProviders: React.FC<{
         });
       },
     });
+  const builderQueryStorage = useInitialValue<BuilderQueryStorageAccess>({
+    getStorage(options) {
+      return createElectronBuilderQueryStorage({ basepath: options?.basepath });
+    },
+  });
 
   return (
     <PipelineStorageProvider value={pipelineStorage}>
       <FavoriteQueryStorageProvider value={favoriteQueryStorage}>
         <RecentQueryStorageProvider value={recentQueryStorage}>
           <DeletedDocumentsStorageProvider value={deletedDocumentsStorage}>
-            <WorkspacesStorageServiceProviderDesktop>
-              <DataModelStorageServiceProviderElectron>
-                {children}
-              </DataModelStorageServiceProviderElectron>
-            </WorkspacesStorageServiceProviderDesktop>
+            <BuilderQueryStorageProvider value={builderQueryStorage}>
+              <WorkspacesStorageServiceProviderDesktop>
+                <DataModelStorageServiceProviderElectron>
+                  {children}
+                </DataModelStorageServiceProviderElectron>
+              </WorkspacesStorageServiceProviderDesktop>
+            </BuilderQueryStorageProvider>
           </DeletedDocumentsStorageProvider>
         </RecentQueryStorageProvider>
       </FavoriteQueryStorageProvider>

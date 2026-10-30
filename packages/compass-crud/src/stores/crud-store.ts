@@ -17,11 +17,14 @@ import type { Stage } from '@mongodb-js/explain-plan-helper';
 import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
 import { EJSON, UUID } from 'bson';
 import type {
+  BuilderQueryStorage,
+  BuilderQueryStorageAccess,
   FavoriteQueryStorage,
   FavoriteQueryStorageAccess,
   RecentQueryStorage,
   RecentQueryStorageAccess,
 } from '@mongodb-js/my-queries-storage/provider';
+import type { BuilderQuery } from '@mongodb-js/my-queries-storage';
 import type {
   DeletedDocument,
   DeletedDocumentsStorageAccess,
@@ -60,6 +63,14 @@ import {
   openBulkUpdateProgressToast,
   openBulkUpdateSuccessToast,
 } from '../components/bulk-actions-toasts';
+import type { BuilderState } from '../components/query-builder/builder-query';
+import {
+  EMPTY_BUILDER_STATE,
+  builderHasRows,
+  compileBuilderState,
+  compiledQueryToAppliedQuery,
+  toBuilderState,
+} from '../components/query-builder/builder-query';
 import type { DataService } from '../utils/data-service';
 import type {
   Collection,
@@ -347,7 +358,20 @@ export type BulkDeleteState = {
   affected?: number;
 };
 
-type CrudState = {
+export type BuilderQueriesState = {
+  // The visual query builder's rows. Kept here rather than in the panel so
+  // that a default query can fill them in as the collection opens, whether or
+  // not the panel has been rendered yet.
+  builderState: BuilderState;
+  // Saved for this collection on this connection, or null where there is
+  // nowhere to save them, as in Compass Web.
+  savedBuilderQueries: BuilderQuery[] | null;
+  // The saved query last opened, saved or run on open. The star and delete
+  // buttons act on it.
+  selectedBuilderQueryId: string | null;
+};
+
+type CrudState = BuilderQueriesState & {
   ns: string;
   collection: string;
   abortController: AbortController | null;
@@ -408,6 +432,7 @@ class CrudStoreImpl
   favoriteQueriesStorage?: FavoriteQueryStorage;
   recentQueriesStorage?: RecentQueryStorage;
   deletedDocumentsStorage?: DeletedDocumentsStorageInterface;
+  builderQueryStorage?: BuilderQueryStorage;
   fieldStoreService: FieldStoreService;
   logger: Logger;
   track: TrackFunction;
@@ -436,6 +461,7 @@ class CrudStoreImpl
       favoriteQueryStorage?: FavoriteQueryStorage;
       recentQueryStorage?: RecentQueryStorage;
       deletedDocumentsStorage?: DeletedDocumentsStorageInterface;
+      builderQueryStorage?: BuilderQueryStorage;
     }
   ) {
     super(options);
@@ -443,6 +469,7 @@ class CrudStoreImpl
     this.favoriteQueriesStorage = services.favoriteQueryStorage;
     this.recentQueriesStorage = services.recentQueryStorage;
     this.deletedDocumentsStorage = services.deletedDocumentsStorage;
+    this.builderQueryStorage = services.builderQueryStorage;
     this.dataService = services.dataService;
     this.localAppRegistry = services.localAppRegistry;
     this.preferences = services.preferences;
@@ -495,6 +522,9 @@ class CrudStoreImpl
         this.instance.topologyDescription.type !== 'Single',
       docsPerPage: this.getInitialDocsPerPage(),
       collectionStats: extractCollectionStats(this.collectionModel),
+      builderState: EMPTY_BUILDER_STATE,
+      savedBuilderQueries: this.builderQueryStorage ? [] : null,
+      selectedBuilderQueryId: null,
     };
   }
 
@@ -2339,6 +2369,156 @@ class CrudStoreImpl
       description: `${name} added to "My Queries".`,
     });
   }
+
+  /**
+   * Replaces the builder's rows and keeps the query bar showing what they
+   * describe, without running it.
+   *
+   * The bar is written here, with the rows, rather than from an effect on
+   * them. An effect leaves a render in which the rows are new and the bar is
+   * not, which the builder reads as the main query having been changed.
+   *
+   * An empty builder leaves the bar alone: removing the last row stops the
+   * builder describing a query, rather than describing an empty one.
+   */
+  setBuilderState(builderState: BuilderState) {
+    this.setState({ builderState });
+    if (builderHasRows(builderState)) {
+      this.queryBar.setQuery(
+        compiledQueryToAppliedQuery(compileBuilderState(builderState))
+      );
+    }
+  }
+
+  async loadSavedBuilderQueries() {
+    if (!this.builderQueryStorage) {
+      return;
+    }
+    const savedBuilderQueries = await this.builderQueryStorage.loadAll(
+      this.connectionInfoRef.current.id,
+      this.state.ns
+    );
+    this.setState({ savedBuilderQueries });
+  }
+
+  findSavedBuilderQuery(id: string) {
+    return this.state.savedBuilderQueries?.find((query) => query._id === id);
+  }
+
+  /** Fills the builder with a saved query's rows, without running them. */
+  openSavedBuilderQuery(id: string) {
+    const saved = this.findSavedBuilderQuery(id);
+    if (!saved) {
+      return;
+    }
+    this.setState({ selectedBuilderQueryId: id });
+    this.setBuilderState(toBuilderState(saved.builderState));
+  }
+
+  /**
+   * Fills the builder with the collection's default query and applies it, so
+   * that it is the query the collection first loads with.
+   */
+  applyDefaultBuilderQuery() {
+    const defaultQuery = this.state.savedBuilderQueries?.find(
+      (query) => query._isDefault
+    );
+    if (!defaultQuery) {
+      return;
+    }
+    const builderState = toBuilderState(defaultQuery.builderState);
+    this.setState({ builderState, selectedBuilderQueryId: defaultQuery._id });
+    this.queryBar.setAndApplyQuery(
+      compiledQueryToAppliedQuery(compileBuilderState(builderState)),
+      'crud'
+    );
+  }
+
+  async saveBuilderQuery(name: string) {
+    const _name = name.trim();
+    if (!_name || !builderHasRows(this.state.builderState)) {
+      return;
+    }
+    await this.changeSavedBuilderQueries('save the query', async (storage) => {
+      const saved = await storage.saveQuery({
+        _name,
+        _ns: this.state.ns,
+        _connectionId: this.connectionInfoRef.current.id,
+        builderState: this.state.builderState,
+      });
+      this.setState({ selectedBuilderQueryId: saved._id });
+    });
+  }
+
+  /** Makes a saved query the one the collection opens with, or undoes that. */
+  async toggleDefaultBuilderQuery(id: string) {
+    const saved = this.findSavedBuilderQuery(id);
+    if (!saved) {
+      return;
+    }
+    await this.changeSavedBuilderQueries(
+      'change the default query',
+      (storage) =>
+        storage.setDefault(
+          this.connectionInfoRef.current.id,
+          this.state.ns,
+          saved._isDefault ? null : id
+        )
+    );
+  }
+
+  async deleteSavedBuilderQuery(id: string) {
+    const saved = this.findSavedBuilderQuery(id);
+    if (!saved) {
+      return;
+    }
+    const confirmed = await showConfirmation({
+      title: `Delete "${saved._name}"?`,
+      description: saved._isDefault
+        ? 'It is the default query, so this collection will open without one.'
+        : 'It will be removed from the queries saved for this collection.',
+      buttonText: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) {
+      return;
+    }
+    await this.changeSavedBuilderQueries(
+      'delete the query',
+      async (storage) => {
+        await storage.delete(id);
+        if (this.state.selectedBuilderQueryId === id) {
+          this.setState({ selectedBuilderQueryId: null });
+        }
+      }
+    );
+  }
+
+  /**
+   * Makes a change to the saved queries and then reloads them. A failure is
+   * shown rather than thrown, since the button that asked can do nothing more
+   * with it.
+   */
+  async changeSavedBuilderQueries(
+    description: string,
+    change: (storage: BuilderQueryStorage) => Promise<void>
+  ) {
+    if (!this.builderQueryStorage) {
+      return;
+    }
+    try {
+      await change(this.builderQueryStorage);
+    } catch (error) {
+      openToast('saved-builder-query-failed', {
+        title: `Could not ${description}`,
+        description: (error as Error).message,
+        variant: 'warning',
+        dismissible: true,
+        timeout: 6_000,
+      });
+    }
+    await this.loadSavedBuilderQueries();
+  }
 }
 
 export type CrudStore = Store & CrudStoreImpl & { gridStore: GridStore };
@@ -2353,6 +2533,7 @@ export type DocumentsPluginServices = {
   favoriteQueryStorageAccess?: FavoriteQueryStorageAccess;
   recentQueryStorageAccess?: RecentQueryStorageAccess;
   deletedDocumentsStorageAccess?: DeletedDocumentsStorageAccess;
+  builderQueryStorageAccess?: BuilderQueryStorageAccess;
   fieldStoreService: FieldStoreService;
   connectionInfoRef: ConnectionInfoRef;
   connectionScopedAppRegistry: ConnectionScopedAppRegistry<EmittedAppRegistryEvents>;
@@ -2373,6 +2554,7 @@ export function activateDocumentsPlugin(
     favoriteQueryStorageAccess,
     recentQueryStorageAccess,
     deletedDocumentsStorageAccess,
+    builderQueryStorageAccess,
     fieldStoreService,
     connectionInfoRef,
     connectionScopedAppRegistry,
@@ -2381,6 +2563,7 @@ export function activateDocumentsPlugin(
   }: DocumentsPluginServices,
   { on, cleanup }: ActivateHelpers
 ) {
+  let isDeactivated = false;
   const actions = configureActions();
   const store = Reflux.createStore(
     new CrudStoreImpl(
@@ -2396,6 +2579,7 @@ export function activateDocumentsPlugin(
         favoriteQueryStorage: favoriteQueryStorageAccess?.getStorage(),
         recentQueryStorage: recentQueryStorageAccess?.getStorage(),
         deletedDocumentsStorage: deletedDocumentsStorageAccess?.getStorage(),
+        builderQueryStorage: builderQueryStorageAccess?.getStorage(),
         fieldStoreService,
         connectionScopedAppRegistry,
         queryBar,
@@ -2448,10 +2632,23 @@ export function activateDocumentsPlugin(
     }
   });
 
+  const savedBuilderQueriesLoaded = store.loadSavedBuilderQueries();
+
   if (!options.noRefreshOnConfigure) {
-    queueMicrotask(() => {
-      void store.refreshDocuments();
-    });
+    void (async () => {
+      // The first load waits for the saved queries, so that the default one
+      // is what it runs. This is the collection opening rather than its tab
+      // being switched back to, which finds the store as it was left. Opening
+      // it to run a particular query, as from My Queries, skips the default.
+      await savedBuilderQueriesLoaded;
+      if (isDeactivated) {
+        return;
+      }
+      if (!options.query) {
+        store.applyDefaultBuilderQuery();
+      }
+      await store.refreshDocuments();
+    })();
   }
 
   if ((options.query as any)?.update) {
@@ -2472,6 +2669,7 @@ export function activateDocumentsPlugin(
     store,
     actions,
     deactivate() {
+      isDeactivated = true;
       store.cancelOperation();
       store.cancelCount();
       cleanup();
