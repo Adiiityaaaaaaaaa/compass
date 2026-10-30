@@ -549,6 +549,15 @@ function applyValueType(
   return { ok: true, value: cast };
 }
 
+// By its tag rather than instanceof, since a value dragged from a document
+// was made by whichever copy of bson the document list uses.
+function isRegularExpression(value: unknown): boolean {
+  return (
+    value instanceof RegExp ||
+    (value as { _bsontype?: string } | null)?._bsontype === 'BSONRegExp'
+  );
+}
+
 function conditionToFilterFragment(
   row: ConditionRow
 ): { field: string; value: unknown } | { error: string } {
@@ -584,6 +593,16 @@ function conditionToFilterFragment(
   switch (row.operator) {
     case 'eq':
       return { field: row.field, value: parsed.value };
+    case 'ne':
+      // The server refuses a regex as the argument to $ne. $not takes one,
+      // and leaves out exactly the documents equality with it would match:
+      // https://www.mongodb.com/docs/manual/reference/operator/query/not/#-not-and-regular-expressions
+      return {
+        field: row.field,
+        value: isRegularExpression(parsed.value)
+          ? { $not: parsed.value }
+          : { $ne: parsed.value },
+      };
     case 'in':
     case 'nin': {
       // A single value is accepted and wrapped, so that switching an existing

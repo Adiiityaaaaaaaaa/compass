@@ -585,6 +585,32 @@ describe('builder-query', function () {
       });
     });
 
+    it('compiles not equal to a pattern with $not, which the server takes', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({ field: 'email', operator: 'ne', valueText: '/^ali/i' }),
+            condition({
+              id: 'c2',
+              field: 'stored',
+              operator: 'ne',
+              valueText: '/^bob/',
+              value: new BSON.BSONRegExp('^bob', ''),
+            }),
+            condition({
+              id: 'c3',
+              field: 'age',
+              operator: 'ne',
+              valueText: '25',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter.email).to.deep.equal({ $not: /^ali/i });
+      expect(compiled.filter.stored).to.have.property('$not');
+      expect(compiled.filter.age).to.deep.equal({ $ne: 25 });
+    });
+
     it('compiles the exists operators without reading a value', function () {
       const compiled = compileBuilderState(
         state({
