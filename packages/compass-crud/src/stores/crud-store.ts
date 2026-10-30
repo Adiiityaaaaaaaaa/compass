@@ -72,6 +72,7 @@ import {
   toBuilderState,
 } from '../components/query-builder/builder-query';
 import type { DataService } from '../utils/data-service';
+import { keepExpandedFields } from '../utils/keep-expanded-fields';
 import type {
   Collection,
   MongoDBInstance,
@@ -900,7 +901,9 @@ class CrudStoreImpl
         const newDocs = this.state.docs
           ? [...this.state.docs]
           : this.state.docs;
-        newDocs?.splice(index, 1, new HadronDocument(d));
+        const updatedDoc = new HadronDocument(d);
+        keepExpandedFields([doc], [updatedDoc]);
+        newDocs?.splice(index, 1, updatedDoc);
         this.setState({
           docs: newDocs,
         });
@@ -1003,7 +1006,9 @@ class CrudStoreImpl
         const newDocs = this.state.docs
           ? [...this.state.docs]
           : this.state.docs;
-        newDocs?.splice(index, 1, new HadronDocument(d));
+        const replacedDoc = new HadronDocument(d);
+        keepExpandedFields([doc], [replacedDoc]);
+        newDocs?.splice(index, 1, replacedDoc);
         this.setState({
           docs: newDocs,
         });
@@ -1994,6 +1999,7 @@ class CrudStoreImpl
 
     try {
       const [shardKeys, docs] = await Promise.all(promises);
+      keepExpandedFields(this.state.docs, docs);
 
       Object.assign(stateChanges, {
         status: this.isInitialQuery(query)
