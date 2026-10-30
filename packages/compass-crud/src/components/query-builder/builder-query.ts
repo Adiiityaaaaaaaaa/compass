@@ -88,6 +88,15 @@ export function detectValueType(value: unknown): ValueType | undefined {
 
 /** Reads a value as the type asked for, or says why it cannot be. */
 export function castValue(value: unknown, type: ValueType): ParsedValue {
+  if (detectValueType(value) === type) {
+    return { ok: true, value };
+  }
+  // TypeChecker makes up a new ObjectId for anything but a hex string, an
+  // ObjectId included, which suits the document editor changing a field's
+  // type. In a query it matches nothing, and a different id on every compile.
+  if (type === 'ObjectId' && typeof value !== 'string') {
+    return { ok: false, error: `${String(value)} is not a ${type}` };
+  }
   try {
     const cast = TypeChecker.cast(value, type);
     // A number that will not parse comes back as NaN rather than throwing,

@@ -379,6 +379,43 @@ describe('builder-query', function () {
       expect(compiled.errors).to.have.lengthOf(1);
       expect(compiled.errors[0]).to.match(/not a Int32|not a number/);
     });
+
+    it('keeps a dragged ObjectId the id it was', function () {
+      const id = new BSON.ObjectId('6aa58011e0a9d9da55fffea5');
+      // As a dragged _id arrives: the value, its text, its type pinned.
+      const rows = state({
+        conditions: [
+          condition({
+            field: '_id',
+            valueText: valueToText(id),
+            value: id,
+            valueType: 'ObjectId',
+          }),
+        ],
+      });
+
+      const first = compileBuilderState(rows);
+      const second = compileBuilderState(rows);
+
+      expect(String(first.filter._id)).to.equal('6aa58011e0a9d9da55fffea5');
+      expect(String(second.filter._id)).to.equal(String(first.filter._id));
+    });
+
+    it('reports a value that cannot be an ObjectId rather than making one up', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: '_id',
+              valueText: '123',
+              valueType: 'ObjectId',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({});
+      expect(compiled.errors).to.deep.equal(['_id: 123 is not a ObjectId']);
+    });
   });
 
   describe('compileBuilderState', function () {
