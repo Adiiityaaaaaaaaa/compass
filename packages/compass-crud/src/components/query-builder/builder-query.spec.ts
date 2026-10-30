@@ -5,6 +5,7 @@ import {
   EMPTY_BUILDER_STATE,
   compileBuilderState,
   compiledQueryToAppliedQuery,
+  doesQueryBarShow,
   parseValueText,
   parseListText,
   valueTextForOperator,
@@ -821,6 +822,101 @@ describe('builder-query', function () {
       expect(query.sort).to.deep.equal({ timestamp: -1 });
       expect(query.skip).to.equal(5);
       expect(query.limit).to.equal(20);
+    });
+  });
+
+  describe('doesQueryBarShow', function () {
+    // What the bar holds for a projection, sort, skip and limit that were
+    // written into it empty.
+    const emptyBarParts = { project: null, sort: null, skip: 0, limit: 0 };
+
+    it('is true for the query bar holding the builder query', function () {
+      const compiled = compileBuilderState(
+        state({ conditions: [condition({})] })
+      );
+      expect(
+        doesQueryBarShow(
+          { filter: { status: 'shipped' }, ...emptyBarParts },
+          compiled
+        )
+      ).to.equal(true);
+    });
+
+    it('compares typed values by what they are, not by identity', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({ field: 'age', valueText: '25', valueType: 'Int64' }),
+            condition({
+              id: 'c2',
+              field: 'email',
+              operator: 'contains',
+              valueText: 'alice@example.com',
+            }),
+          ],
+        })
+      );
+      // The bar parses its own copies, so none of these are the builder's.
+      const barFilter = {
+        age: BSON.Long.fromNumber(25),
+        email: /alice@example\.com/i,
+      };
+      expect(
+        doesQueryBarShow({ filter: barFilter, ...emptyBarParts }, compiled)
+      ).to.equal(true);
+    });
+
+    it('is false once the filter is edited in the bar', function () {
+      const compiled = compileBuilderState(
+        state({ conditions: [condition({})] })
+      );
+      expect(
+        doesQueryBarShow(
+          { filter: { status: 'delivered' }, ...emptyBarParts },
+          compiled
+        )
+      ).to.equal(false);
+    });
+
+    it('is false once a projection is added in the bar', function () {
+      const compiled = compileBuilderState(
+        state({ conditions: [condition({})] })
+      );
+      expect(
+        doesQueryBarShow(
+          {
+            filter: { status: 'shipped' },
+            ...emptyBarParts,
+            project: { name: 1 },
+          },
+          compiled
+        )
+      ).to.equal(false);
+    });
+
+    it('is false once the limit is changed in the bar', function () {
+      const compiled = compileBuilderState(
+        state({ conditions: [condition({})], limit: '20' })
+      );
+      expect(
+        doesQueryBarShow(
+          { filter: { status: 'shipped' }, ...emptyBarParts, limit: 50 },
+          compiled
+        )
+      ).to.equal(false);
+    });
+
+    it('ignores the options the builder does not set', function () {
+      const compiled = compileBuilderState(
+        state({ conditions: [condition({})] })
+      );
+      const barQuery = {
+        filter: { status: 'shipped' },
+        ...emptyBarParts,
+        collation: { locale: 'fr' },
+        maxTimeMS: 5000,
+      };
+      expect(doesQueryBarShow(barQuery, compiled)).to.equal(true);
     });
   });
 });

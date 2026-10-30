@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   Icon,
   IconButton,
@@ -13,9 +13,11 @@ import {
 import DocumentList from '../document-list';
 import type { DocumentListProps } from '../document-list';
 import { QueryBuilderPanel } from './query-builder-panel';
+import { MainQueryChangedGuard } from './main-query-changed-guard';
 import type { BuilderState } from './builder-query';
 import {
   EMPTY_BUILDER_STATE,
+  builderHasRows,
   compileBuilderState,
   compiledQueryToAppliedQuery,
 } from './builder-query';
@@ -96,6 +98,10 @@ const collapsedStripDark = css({
  * filter, projection, sort, skip and limit into the query bar inputs, and
  * running applies them from there. So the query the builder describes is the
  * same query, in the same boxes, as one typed by hand.
+ *
+ * It only goes that way. Editing the query bar by hand leaves the rows as they
+ * were, and the builder is greyed out until it is either written back over
+ * the bar or cleared.
  */
 export const DocumentsWithQueryBuilder: React.FunctionComponent<
   DocumentListProps
@@ -128,25 +134,34 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
     [builderState]
   );
 
-  const builderHasRows =
-    builderState.conditions.length > 0 ||
-    builderState.projections.length > 0 ||
-    builderState.sorts.length > 0 ||
-    builderState.skip.trim() !== '' ||
-    builderState.limit.trim() !== '';
-
-  // Keep the query bar showing what the rows describe, without running it.
+  // Keeps the query bar showing what the rows describe, without running it.
   //
-  // Only while the panel is open and actually has rows. An empty builder must
-  // not write to the bar, or opening the panel would wipe a query typed by
-  // hand. Once there are rows the builder owns the query, and editing a row
-  // replaces whatever is in the bar.
-  useEffect(() => {
-    if (isCollapsed || !builderHasRows) {
-      return;
-    }
+  // Written as the rows change rather than from an effect. An effect left a
+  // render in which the rows were new and the bar was not, which read as the
+  // main query having changed, and it wrote again whenever the panel mounted,
+  // replacing a query typed into the bar while the tab was in the background.
+  //
+  // An empty builder leaves the bar alone: removing the last row stops the
+  // builder describing a query, rather than describing an empty one.
+  const onBuilderChange = useCallback(
+    (nextState: BuilderState) => {
+      setBuilderState(nextState);
+      if (builderHasRows(nextState)) {
+        store.queryBar.setQuery(
+          compiledQueryToAppliedQuery(compileBuilderState(nextState))
+        );
+      }
+    },
+    [setBuilderState, store]
+  );
+
+  const onProceed = useCallback(() => {
     store.queryBar.setQuery(compiledQueryToAppliedQuery(compiled));
-  }, [compiled, store, isCollapsed, builderHasRows]);
+  }, [compiled, store]);
+
+  const onClearBuilder = useCallback(() => {
+    setBuilderState(EMPTY_BUILDER_STATE);
+  }, [setBuilderState]);
 
   const onRun = useCallback(() => {
     // Every property is sent on every run, using undefined for the ones the
@@ -210,14 +225,21 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
               <Icon glyph="ChevronRight" />
             </IconButton>
           </div>
-          <div className={builderScroll}>
-            <QueryBuilderPanel
-              state={builderState}
-              onChange={setBuilderState}
-              onRun={onRun}
-              errors={compiled.errors}
-            />
-          </div>
+          <MainQueryChangedGuard
+            builderState={builderState}
+            compiled={compiled}
+            onProceed={onProceed}
+            onClearBuilder={onClearBuilder}
+          >
+            <div className={builderScroll}>
+              <QueryBuilderPanel
+                state={builderState}
+                onChange={onBuilderChange}
+                onRun={onRun}
+                errors={compiled.errors}
+              />
+            </div>
+          </MainQueryChangedGuard>
         </aside>
       )}
     </div>
