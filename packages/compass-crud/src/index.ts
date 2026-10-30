@@ -25,6 +25,7 @@ import { registerCompassPlugin } from '@mongodb-js/compass-app-registry';
 import { preferencesLocator } from 'compass-preferences-model/provider';
 import { createLoggerLocator } from '@mongodb-js/compass-logging/provider';
 import {
+  builderQueryStorageAccessLocator,
   favoriteQueryStorageAccessLocator,
   recentQueryStorageAccessLocator,
 } from '@mongodb-js/my-queries-storage/provider';
@@ -62,6 +63,7 @@ const CompassDocumentsPluginProvider = registerCompassPlugin(
     favoriteQueryStorageAccess: favoriteQueryStorageAccessLocator,
     recentQueryStorageAccess: recentQueryStorageAccessLocator,
     deletedDocumentsStorageAccess: deletedDocumentsStorageAccessLocator,
+    builderQueryStorageAccess: builderQueryStorageAccessLocator,
     fieldStoreService: fieldStoreServiceLocator,
     connectionInfoRef: connectionInfoRefLocator,
     connectionScopedAppRegistry:

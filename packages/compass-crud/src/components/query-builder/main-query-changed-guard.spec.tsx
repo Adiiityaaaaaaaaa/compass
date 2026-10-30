@@ -1,6 +1,7 @@
 import React from 'react';
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { ObjectId } from 'bson';
 import {
   act,
   cleanup,
@@ -111,6 +112,32 @@ describe('MainQueryChangedGuard', function () {
     expect(
       screen.getByTestId('query-builder-guarded-content')
     ).to.not.have.attribute('inert');
+  });
+
+  it('leaves the builder usable with a dragged ObjectId in it', function () {
+    const id = new ObjectId('6aa58011e0a9d9da55fffea5');
+    const builderWithId: BuilderState = {
+      ...EMPTY_BUILDER_STATE,
+      conditions: [
+        {
+          id: 'c1',
+          field: '_id',
+          operator: 'eq',
+          valueText: '6aa58011e0a9d9da55fffea5',
+          value: id,
+          valueType: 'ObjectId',
+          enabled: true,
+        },
+      ],
+    };
+    renderGuard(builderWithId);
+
+    act(() => {
+      changeQuery('setValue', { field: '_id', value: id });
+    });
+
+    expect(screen.queryByTestId('query-builder-main-query-changed')).to.not
+      .exist;
   });
 
   it('leaves an empty builder alone whatever the main query is', function () {

@@ -91,14 +91,17 @@ import {
   createWebRecentQueryStorage,
   createWebFavoriteQueryStorage,
   createWebPipelineStorage,
+  createWebBuilderQueryStorage,
 } from '@mongodb-js/my-queries-storage/web';
 import {
   PipelineStorageProvider,
   FavoriteQueryStorageProvider,
   RecentQueryStorageProvider,
+  BuilderQueryStorageProvider,
   type FavoriteQueryStorageAccess,
   type RecentQueryStorageAccess,
   type PipelineStorageAccess,
+  type BuilderQueryStorageAccess,
 } from '@mongodb-js/my-queries-storage/provider';
 import { createWebDeletedDocumentsStorage } from '@mongodb-js/my-deleted-documents-storage/web';
 import {
@@ -248,6 +251,11 @@ const WithStorageProviders = createServiceProvider(
         });
       },
     });
+    const builderQueryStorage = useRef<BuilderQueryStorageAccess>({
+      getStorage() {
+        return createWebBuilderQueryStorage();
+      },
+    });
     return (
       <PipelineStorageProvider value={pipelineStorage.current}>
         <FavoriteQueryStorageProvider value={favoriteQueryStorage.current}>
@@ -255,13 +263,15 @@ const WithStorageProviders = createServiceProvider(
             <DeletedDocumentsStorageProvider
               value={deletedDocumentsStorage.current}
             >
-              <WorkspacesStorageServiceProviderWeb
-                orgId={orgId}
-                projectId={projectId}
-                atlasService={atlasService}
-              >
-                {children}
-              </WorkspacesStorageServiceProviderWeb>
+              <BuilderQueryStorageProvider value={builderQueryStorage.current}>
+                <WorkspacesStorageServiceProviderWeb
+                  orgId={orgId}
+                  projectId={projectId}
+                  atlasService={atlasService}
+                >
+                  {children}
+                </WorkspacesStorageServiceProviderWeb>
+              </BuilderQueryStorageProvider>
             </DeletedDocumentsStorageProvider>
           </RecentQueryStorageProvider>
         </FavoriteQueryStorageProvider>

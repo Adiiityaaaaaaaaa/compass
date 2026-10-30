@@ -1,5 +1,9 @@
 import { type z } from '@mongodb-js/compass-user-data';
-import type { RecentQuery, FavoriteQuery } from './query-storage-schema';
+import type {
+  RecentQuery,
+  FavoriteQuery,
+  BuilderQuery,
+} from './query-storage-schema';
 import type { SavedPipeline } from './pipeline-storage-schema';
 
 // Shared interfaces for query storage
@@ -53,6 +57,19 @@ export interface FavoriteQueryStorageInterface {
     >,
     _id?: string
   ): Promise<void>;
+}
+
+export interface BuilderQueryStorageInterface {
+  loadAll(connectionId: string, namespace: string): Promise<BuilderQuery[]>;
+  saveQuery(
+    data: Pick<BuilderQuery, '_name' | '_ns' | '_connectionId' | 'builderState'>
+  ): Promise<BuilderQuery>;
+  setDefault(
+    connectionId: string,
+    namespace: string,
+    id: string | null
+  ): Promise<void>;
+  delete(id: string): Promise<boolean>;
 }
 
 // Shared interface for pipeline storage

@@ -88,6 +88,15 @@ export function detectValueType(value: unknown): ValueType | undefined {
 
 /** Reads a value as the type asked for, or says why it cannot be. */
 export function castValue(value: unknown, type: ValueType): ParsedValue {
+  if (detectValueType(value) === type) {
+    return { ok: true, value };
+  }
+  // TypeChecker makes up a new ObjectId for anything but a hex string, an
+  // ObjectId included, which suits the document editor changing a field's
+  // type. In a query it matches nothing, and a different id on every compile.
+  if (type === 'ObjectId' && typeof value !== 'string') {
+    return { ok: false, error: `${String(value)} is not a ${type}` };
+  }
   try {
     const cast = TypeChecker.cast(value, type);
     // A number that will not parse comes back as NaN rather than throwing,
@@ -177,6 +186,31 @@ let idCounter = 0;
 export function nextRowId(prefix: string): string {
   idCounter += 1;
   return `${prefix}-${idCounter}`;
+}
+
+function savedRows<T extends { id: string }>(rows: unknown, prefix: string) {
+  return Array.isArray(rows)
+    ? (rows as T[]).map((row) => ({ ...row, id: nextRowId(prefix) }))
+    : [];
+}
+
+/**
+ * The builder state a saved query holds, ready to put back in the builder.
+ *
+ * Every row gets a new id. The ids come from a counter that starts again each
+ * time Compass does, so the ones a query was saved with can already belong to
+ * rows on screen, and two rows sharing an id are edited as one.
+ */
+export function toBuilderState(saved: unknown): BuilderState {
+  const state = (saved ?? {}) as Partial<Record<keyof BuilderState, unknown>>;
+  return {
+    match: state.match === 'or' ? 'or' : 'and',
+    conditions: savedRows<ConditionRow>(state.conditions, 'condition'),
+    projections: savedRows<ProjectionRow>(state.projections, 'projection'),
+    sorts: savedRows<SortRow>(state.sorts, 'sort'),
+    skip: typeof state.skip === 'string' ? state.skip : '',
+    limit: typeof state.limit === 'string' ? state.limit : '',
+  };
 }
 
 /**
