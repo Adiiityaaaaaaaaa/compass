@@ -433,6 +433,26 @@ describe('builder-query', function () {
       });
     });
 
+    it('reports a half typed date rather than querying an invalid one', function () {
+      // Backspacing 09:30 to 09:0 is what a date looks like mid-edit. It used
+      // to reach the query as ISODate('Invalid Date').
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'startedAt',
+              operator: 'eq',
+              valueText: '2026-11-03T09:0',
+              valueType: 'Date',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({});
+      expect(compiled.errors).to.have.lengthOf(1);
+      expect(compiled.errors[0]).to.match(/is not a Date/);
+    });
+
     it('reports a value that cannot be the chosen type', function () {
       const compiled = compileBuilderState(
         state({

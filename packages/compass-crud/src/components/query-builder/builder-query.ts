@@ -105,6 +105,14 @@ export function castValue(value: unknown, type: ValueType): ParsedValue {
     if (typeof cast === 'number' && Number.isNaN(cast)) {
       return { ok: false, error: `${String(value)} is not a ${type}` };
     }
+    // A date that will not parse comes back as an Invalid Date, which is
+    // worse: it reads as a date all the way into the query, where it is
+    // written as ISODate('Invalid Date') and asked of the server. Half a
+    // date is what a date looks like while it is being typed, so this is
+    // the ordinary case rather than a strange one.
+    if (cast instanceof Date && Number.isNaN(cast.getTime())) {
+      return { ok: false, error: `${String(value)} is not a ${type}` };
+    }
     return { ok: true, value: cast };
   } catch {
     return { ok: false, error: `${String(value)} is not a ${type}` };
