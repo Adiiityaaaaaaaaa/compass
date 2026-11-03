@@ -69,6 +69,7 @@ import {
   builderHasRows,
   compileBuilderState,
   compiledQueryToAppliedQuery,
+  type AppliedQuery,
   toBuilderState,
 } from '../components/query-builder/builder-query';
 import type { DataService } from '../utils/data-service';
@@ -370,6 +371,10 @@ export type BuilderQueriesState = {
   // The saved query last opened, saved or run on open. The star and delete
   // buttons act on it.
   selectedBuilderQueryId: string | null;
+  // The query the builder last wrote into the query bar, or null when it has
+  // written nothing. The bar no longer showing this is what says the main
+  // query was changed by something other than the builder.
+  builderQueryInBar: AppliedQuery | null;
 };
 
 type CrudState = BuilderQueriesState & {
@@ -524,6 +529,7 @@ class CrudStoreImpl
       docsPerPage: this.getInitialDocsPerPage(),
       collectionStats: extractCollectionStats(this.collectionModel),
       builderState: EMPTY_BUILDER_STATE,
+      builderQueryInBar: null,
       savedBuilderQueries: this.builderQueryStorage ? [] : null,
       selectedBuilderQueryId: null,
     };
@@ -2389,11 +2395,20 @@ class CrudStoreImpl
    */
   setBuilderState(builderState: BuilderState) {
     this.setState({ builderState });
-    if (builderHasRows(builderState)) {
-      this.queryBar.setQuery(
-        compiledQueryToAppliedQuery(compileBuilderState(builderState))
-      );
+    if (!builderHasRows(builderState)) {
+      // Nothing was written, so there is nothing for the bar to still be
+      // showing and nothing to warn about.
+      this.setState({ builderQueryInBar: null });
+      return;
     }
+    const builderQuery = compiledQueryToAppliedQuery(
+      compileBuilderState(builderState)
+    );
+    this.queryBar.setQuery(builderQuery);
+    // Kept so the warning can ask whether the bar still shows what the
+    // builder put there. Comparing against a fresh compile instead made
+    // editing a row look like a hand edit of the bar.
+    this.setState({ builderQueryInBar: builderQuery });
   }
 
   async loadSavedBuilderQueries() {
@@ -2433,7 +2448,10 @@ class CrudStoreImpl
       return;
     }
     const builderState = toBuilderState(defaultQuery.builderState);
-    this.setState({ builderState, selectedBuilderQueryId: defaultQuery._id });
+    this.setState({ selectedBuilderQueryId: defaultQuery._id });
+    // Through setBuilderState so the bar is written and recorded, rather than
+    // left looking like somebody else had changed it.
+    this.setBuilderState(builderState);
     this.queryBar.setAndApplyQuery(
       compiledQueryToAppliedQuery(compileBuilderState(builderState)),
       'crud'

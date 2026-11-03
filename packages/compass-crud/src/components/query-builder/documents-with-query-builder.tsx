@@ -13,7 +13,7 @@ import {
 import DocumentList from '../document-list';
 import type { DocumentListProps } from '../document-list';
 import { QueryBuilderPanel } from './query-builder-panel';
-import { MainQueryChangedGuard } from './main-query-changed-guard';
+import { MainQueryChangedNotice } from './main-query-changed-notice';
 import { SavedQueriesBar } from './saved-queries-bar';
 import type { BuilderQueriesState } from '../../stores/crud-store';
 import type { BuilderState } from './builder-query';
@@ -112,8 +112,13 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
   DocumentListProps & BuilderQueriesState
 > = (props) => {
   const darkMode = useDarkMode();
-  const { store, builderState, savedBuilderQueries, selectedBuilderQueryId } =
-    props;
+  const {
+    store,
+    builderState,
+    savedBuilderQueries,
+    selectedBuilderQueryId,
+    builderQueryInBar,
+  } = props;
   const [builderWidth, setBuilderWidth] = useTabState(
     'query-builder-width',
     DEFAULT_BUILDER_WIDTH
@@ -136,14 +141,6 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
     (nextState: BuilderState) => store.setBuilderState(nextState),
     [store]
   );
-
-  const onProceed = useCallback(() => {
-    store.queryBar.setQuery(compiledQueryToAppliedQuery(compiled));
-  }, [compiled, store]);
-
-  const onClearBuilder = useCallback(() => {
-    store.setBuilderState(EMPTY_BUILDER_STATE);
-  }, [store]);
 
   const onOpenSavedQuery = useCallback(
     (id: string) => store.openSavedBuilderQuery(id),
@@ -224,11 +221,9 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
               <Icon glyph="ChevronRight" />
             </IconButton>
           </div>
-          <MainQueryChangedGuard
+          <MainQueryChangedNotice
             builderState={builderState}
-            compiled={compiled}
-            onProceed={onProceed}
-            onClearBuilder={onClearBuilder}
+            queryInBar={builderQueryInBar}
           >
             <div className={builderScroll}>
               <QueryBuilderPanel
@@ -251,7 +246,7 @@ export const DocumentsWithQueryBuilder: React.FunctionComponent<
                 }
               />
             </div>
-          </MainQueryChangedGuard>
+          </MainQueryChangedNotice>
         </aside>
       )}
     </div>

@@ -779,13 +779,17 @@ export function compiledQueryToText(compiled: CompiledQuery): {
  * removing the last projection row would otherwise leave the old projection
  * in effect. `undefined` is what clears a property.
  */
-export function compiledQueryToAppliedQuery(compiled: CompiledQuery): {
+export type AppliedQuery = {
   filter: Record<string, unknown>;
   project: Record<string, number> | undefined;
   sort: Record<string, number> | undefined;
   skip: number | undefined;
   limit: number | undefined;
-} {
+};
+
+export function compiledQueryToAppliedQuery(
+  compiled: CompiledQuery
+): AppliedQuery {
   return {
     filter: compiled.filter,
     project: compiled.project ?? undefined,
@@ -833,11 +837,20 @@ function queryPartText(value: unknown): string {
  * once the query is edited in the bar by hand, or replaced from anywhere else
  * that writes to the bar, such as the query history.
  */
+/**
+ * Whether the query bar still shows the query the builder put there.
+ *
+ * Compared against what the builder last wrote rather than against a fresh
+ * compile of its rows. The two are not the same thing: the bar keeps its
+ * query as text and parses it back, and a value that does not survive that
+ * round trip unchanged read as a hand edit when it was nothing of the kind.
+ * Comparing against what was written can only disagree when something else
+ * wrote to the bar, which is the thing worth saying.
+ */
 export function doesQueryBarShow(
   barQuery: QueryBarQuery,
-  compiled: CompiledQuery
+  builderQuery: AppliedQuery
 ): boolean {
-  const builderQuery = compiledQueryToAppliedQuery(compiled);
   return BUILDER_QUERY_PARTS.every(
     (part) =>
       queryPartText(barQuery[part]) === queryPartText(builderQuery[part])
