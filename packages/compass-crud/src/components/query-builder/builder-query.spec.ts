@@ -433,6 +433,75 @@ describe('builder-query', function () {
       });
     });
 
+    it('keeps the leading zeros of a String typed as digits', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'applicant.contact.mobileNumber',
+              operator: 'eq',
+              valueText: '007512294209',
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({
+        'applicant.contact.mobileNumber': '007512294209',
+      });
+    });
+
+    it('does not read a leading zero as octal on the way to a String', function () {
+      // 0012 is a legacy octal literal, so reading it first made it 10.
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'code',
+              operator: 'eq',
+              valueText: '0012',
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({ code: '0012' });
+    });
+
+    it('keeps leading zeros for every value in an in list', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'code',
+              operator: 'in',
+              valueText: "['0012', '0034']",
+              valueType: 'String',
+            }),
+          ],
+        })
+      );
+      expect(compiled.filter).to.deep.equal({
+        code: { $in: ['0012', '0034'] },
+      });
+    });
+
+    it('still reads a typed number as a number', function () {
+      const compiled = compileBuilderState(
+        state({
+          conditions: [
+            condition({
+              field: 'count',
+              operator: 'eq',
+              valueText: '0012',
+              valueType: 'Int32',
+            }),
+          ],
+        })
+      );
+      expect(Number(compiled.filter.count)).to.equal(12);
+    });
+
     it('reports a half typed date rather than querying an invalid one', function () {
       // Backspacing 09:30 to 09:0 is what a date looks like mid-edit. It used
       // to reach the query as ISODate('Invalid Date').

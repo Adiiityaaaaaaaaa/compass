@@ -105,6 +105,18 @@ export function castValue(value: unknown, type: ValueType): ParsedValue {
     if (typeof cast === 'number' && Number.isNaN(cast)) {
       return { ok: false, error: `${String(value)} is not a ${type}` };
     }
+    // A BSON number keeps its value inside a wrapper, so NaN in one is an
+    // object and gets past the check above. Double('x') becomes Double(NaN),
+    // which goes into a query as null and matches nothing.
+    if (
+      (type === 'Double' ||
+        type === 'Int32' ||
+        type === 'Int64' ||
+        type === 'Decimal128') &&
+      Number.isNaN(Number(cast))
+    ) {
+      return { ok: false, error: `${String(value)} is not a ${type}` };
+    }
     // A date that will not parse comes back as an Invalid Date, which is
     // worse: it reads as a date all the way into the query, where it is
     // written as ISODate('Invalid Date') and asked of the server. Half a
@@ -534,6 +546,50 @@ export function conditionValue(row: ConditionRow): unknown {
   return Array.isArray(read.value) ? read.value[0] : read.value;
 }
 
+/**
+ * The text a row holds, kept as text, for a row that has been given a type.
+ *
+ * The type's cast does the reading, so the text is handed over as it was
+ * written. A list is split on its commas and brackets without reading the
+ * values either, since each one is about to be cast in the same way.
+ */
+function readTextForType(row: ConditionRow, isList: boolean): ParsedValue {
+  if (!isList) {
+    const text = row.valueText.trim();
+    return text === ''
+      ? { ok: false, error: 'Value is empty' }
+      : { ok: true, value: text };
+  }
+
+  const trimmed = row.valueText.trim().replace(/^\[|\]$/g, '');
+  const parts = trimmed
+    .split(',')
+    .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((part) => part !== '');
+  return parts.length === 0
+    ? { ok: false, error: 'Value is empty' }
+    : { ok: true, value: parts };
+}
+
+/**
+ * Casts the text as written, or null when the type will not take it.
+ *
+ * Null rather than an error, because not every row holds a bare value: one
+ * written as ObjectId('…') is meant, and is read before casting instead.
+ */
+function castTextDirectly(
+  row: ConditionRow,
+  valueType: ValueType,
+  isList: boolean
+): ParsedValue | null {
+  const text = readTextForType(row, isList);
+  if (!text.ok) {
+    return null;
+  }
+  const cast = applyValueType(text, valueType, isList);
+  return cast.ok ? cast : null;
+}
+
 function applyValueType(
   read: { ok: true; value: unknown },
   valueType: ValueType | undefined,
@@ -585,15 +641,22 @@ function conditionToFilterFragment(
   }
 
   const isList = row.operator === 'in' || row.operator === 'nin';
-  const read = isList ? readListValue(row) : readValue(row);
-  if (!read.ok) {
-    return { error: `${row.field}: ${read.error}` };
-  }
 
-  // A chosen type is an instruction, so it is applied last and overrides both
-  // what the text looked like and what was dragged in. For a list it applies
-  // to each value in it, since they all sit in the same field.
-  const parsed = applyValueType(read, row.valueType, isList);
+  // A chosen type gets the text as written before anything reads it, because
+  // reading it first loses what the type was being asked for: 007512294209
+  // parses as a number, which drops the zeros before String ever sees it, and
+  // 0012 parses as octal 10, which is not the same value at all.
+  //
+  // Text the type cannot take is read first after all and then cast, so a row
+  // holding ObjectId('…') or NumberLong('…') still works. Trying it this way
+  // round is what keeps the zeros: the other way there is nothing left to
+  // keep by the time the type is applied.
+  const parsed =
+    (row.valueType && castTextDirectly(row, row.valueType, isList)) ||
+    (() => {
+      const read = isList ? readListValue(row) : readValue(row);
+      return read.ok ? applyValueType(read, row.valueType, isList) : read;
+    })();
   if (!parsed.ok) {
     return { error: `${row.field}: ${parsed.error}` };
   }
